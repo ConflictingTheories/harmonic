@@ -18,11 +18,12 @@
 
 #include <iostream>
 #include "audio_engine.h"
+#include "playlist_manager.h"
 
 class NetworkServer {
 public:
-    NetworkServer(const Config& cfg, std::shared_ptr<AudioEngine> audio) 
-        : config(cfg), audio_engine(audio), running(false), server_fd(-1) {}
+    NetworkServer(Config& cfg, std::shared_ptr<AudioEngine> audio, std::shared_ptr<PlaylistManager> playlist) 
+        : config(cfg), audio_engine(audio), playlist_mgr(playlist), running(false), server_fd(-1) {}
     
     ~NetworkServer() {
         stop();
@@ -88,8 +89,9 @@ public:
     }
     
 private:
-    Config config;
+    Config& config;
     std::shared_ptr<AudioEngine> audio_engine;
+    std::shared_ptr<PlaylistManager> playlist_mgr;
     std::atomic<bool> running;
     int server_fd;
     
@@ -108,6 +110,8 @@ private:
         // Parse HTTP request
         if (request.find("GET / ") == 0 || request.find("GET /index.html") == 0) {
             send_html_response(client_fd);
+        } else if (request.find("GET /api/track") == 0) {
+            send_track_response(client_fd);
         } else if (request.find("GET /api/fft") == 0) {
             send_fft_response(client_fd);
         } else if (request.find("GET /stream") == 0) {
@@ -150,6 +154,60 @@ private:
             json << fft.magnitudes[i];
         }
         json << "]}";
+        
+        std::string json_str = json.str();
+        std::stringstream response;
+        
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Content-Type: application/json\r\n";
+        response << "Content-Length: " << json_str.length() << "\r\n";
+        response << "Access-Control-Allow-Origin: *\r\n";
+        response << "Connection: close\r\n";
+        response << "\r\n";
+        response << json_str;
+        
+        std::string resp_str = response.str();
+        send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+    }
+    
+    void send_track_response(int client_fd) {
+        Track* current_track = playlist_mgr->get_current_track();
+        
+        std::stringstream json;
+        json << "{";
+        if (current_track) {
+            json << "\"title\":\"" << escape_json(current_track->title) << "\",";
+            json << "\"artist\":\"" << escape_json(current_track->artist) << "\",";
+            json << "\"album\":\"" << escape_json(current_track->album) << "\",";
+            json << "\"duration\":" << current_track->duration_ms;
+        } else {
+            json << "\"title\":\"No track loaded\",";
+            json << "\"artist\":\"\",";
+            json << "\"album\":\"\",";
+            json << "\"duration\":0";
+        }
+        json << "}";
+        
+        std::string json_str = json.str();
+        std::stringstream response;
+        
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Content-Type: application/json\r\n";
+        response << "Content-Length: " << json_str.length() << "\r\n";
+        response << "Access-Control-Allow-Origin: *\r\n";
+        response << "Connection: close\r\n";
+        response << "\r\n";
+        response << json_str;
+        
+        std::string resp_str = response.str();
+        send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+    }
+    
+    void send_theme_response(int client_fd) {
+        std::string theme_str = get_theme_param();
+        
+        std::stringstream json;
+        json << "{\"theme\":\"" << theme_str << "\"}";
         
         std::string json_str = json.str();
         std::stringstream response;
@@ -238,6 +296,21 @@ private:
         send(client_fd, response.c_str(), response.length(), 0);
     }
     
+    std::string escape_json(const std::string& str) {
+        std::string result;
+        for (char c : str) {
+            switch (c) {
+                case '"': result += "\\\""; break;
+                case '\\': result += "\\\\"; break;
+                case '\n': result += "\\n"; break;
+                case '\r': result += "\\r"; break;
+                case '\t': result += "\\t"; break;
+                default: result += c; break;
+            }
+        }
+        return result;
+    }
+    
     std::string get_theme_param() {
         switch (config.theme) {
             case VisualizerTheme::CYBERPUNK_COFFEE: return "cyberpunk";
@@ -301,8 +374,9 @@ private:
         resize();
         window.addEventListener('resize', resize);
         
-        const theme = ')" << get_theme_param() << R"(';
         let audioData = { bass: 0, mid: 0, treble: 0, energy: 0, magnitudes: new Array(64).fill(0) };
+        let trackData = { title: "Loading...", artist: "", album: "", duration: 0 };
+        let currentTheme = ')" << get_theme_param() << R"(';
         let frameCount = 0;
         let lastFpsUpdate = Date.now();
         let fps = 0;
@@ -317,6 +391,29 @@ private:
                 .catch(e => {});
         }
         setInterval(updateAudioData, 50); // 20Hz update rate
+        
+        // Fetch track data from server
+        function updateTrackData() {
+            fetch('/api/track')
+                .then(r => r.json())
+                .then(data => {
+                    trackData = data;
+                    document.getElementById('track').textContent = trackData.title;
+                })
+                .catch(e => {});
+        }
+        setInterval(updateTrackData, 1000); // Update every second
+        
+        // Fetch theme data from server
+        function updateTheme() {
+            fetch('/api/theme')
+                .then(r => r.json())
+                .then(data => {
+                    currentTheme = data.theme;
+                })
+                .catch(e => {});
+        }
+        setInterval(updateTheme, 500); // Update every 500ms
         
         // Initialize audio playback
         setTimeout(() => {
@@ -339,11 +436,11 @@ private:
         function render() {
             updateFPS();
             
-            if (theme === 'cyberpunk') {
+            if (currentTheme === 'cyberpunk') {
                 renderCyberpunk();
-            } else if (theme === 'forest') {
+            } else if (currentTheme === 'forest') {
                 renderForest();
-            } else if (theme === 'netherworld') {
+            } else if (currentTheme === 'netherworld') {
                 renderNetherworld();
             }
             

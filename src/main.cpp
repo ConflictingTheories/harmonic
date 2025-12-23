@@ -4,6 +4,7 @@
 #include <thread>
 #include <atomic>
 #include <signal.h>
+#include <fstream>
 
 #include "audio_engine.h"
 #include "playlist_manager.h"
@@ -27,7 +28,14 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         config.load_from_file(argv[1]);
     } else {
-        config.load_defaults();
+        // Try to load default config file
+        std::ifstream test_file("config.txt");
+        if (test_file.good()) {
+            test_file.close();
+            config.load_from_file("config.txt");
+        } else {
+            config.load_defaults();
+        }
     }
     
     std::cout << "🎵 Music Streaming Platform Starting...\n";
@@ -38,7 +46,7 @@ int main(int argc, char** argv) {
         // Initialize core components
         auto audio_engine = std::make_shared<AudioEngine>(config);
         auto playlist_mgr = std::make_shared<PlaylistManager>(config);
-        auto network_srv = std::make_shared<NetworkServer>(config, audio_engine);
+        auto network_srv = std::make_shared<NetworkServer>(config, audio_engine, playlist_mgr);
         auto tui = std::make_shared<TUIInterface>(config, audio_engine, playlist_mgr);
 
         // Set up mode-specific behavior

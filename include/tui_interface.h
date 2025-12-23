@@ -15,7 +15,7 @@
 
 class TUIInterface {
 public:
-    TUIInterface(const Config& cfg, 
+    TUIInterface(Config& cfg, 
                  std::shared_ptr<AudioEngine> audio,
                  std::shared_ptr<PlaylistManager> playlist)
         : config(cfg), audio_engine(audio), playlist_mgr(playlist), running(true) {
@@ -38,7 +38,7 @@ public:
     }
     
 private:
-    Config config;
+    Config& config;
     std::shared_ptr<AudioEngine> audio_engine;
     std::shared_ptr<PlaylistManager> playlist_mgr;
     bool running;
