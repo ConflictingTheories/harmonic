@@ -114,6 +114,8 @@ public:
     
     bool is_active() const { return is_playing; }
     std::string get_current_track() const { return current_track; }
+    void set_muted(bool mute) { muted = mute; }
+    bool is_muted() const { return muted; }
     
 private:
     Config config;
@@ -123,6 +125,7 @@ private:
     
     std::atomic<bool> is_playing;
     std::atomic<bool> live_coding_enabled;
+    std::atomic<bool> muted;
     
     std::unique_ptr<CoderMode> coder;
     
@@ -160,7 +163,7 @@ private:
             for (ma_uint32 i = 0; i < frame_count * 2; ++i) {
                 out[i] = 0.0f;
             }
-            
+
             // Update buffers and return early
             {
                 std::lock_guard<std::mutex> stream_lock(engine->stream_mutex);
@@ -168,6 +171,13 @@ private:
             }
             engine->calculate_fft(out, frame_count);
             return;
+        }
+
+        // Apply mute if enabled
+        if (engine->muted) {
+            for (ma_uint32 i = 0; i < frame_count * 2; ++i) {
+                out[i] = 0.0f;
+            }
         }
         
         // Update stream buffer for network streaming

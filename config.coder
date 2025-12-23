@@ -1,0 +1,31 @@
+# Music Streaming Platform Configuration
+# Copy this file to config.txt and customize
+
+# Playback Mode
+# Options: radio, dj, coder
+mode=coder
+
+# Visualizer Theme
+# Options: cyberpunk, forest, netherworld
+theme=netherworld
+
+# Network Configuration
+web_port=8080
+stream_port=8081
+
+# Audio Configuration
+sample_rate=44100
+buffer_size=512
+
+# Music Directory
+# Path to your music collection
+music_directory=./music
+
+# Playlist File (optional)
+# If specified, loads a specific playlist
+# playlist_file=./playlists/favorites.m3u
+
+# Advanced Settings
+# auto_advance=true
+# shuffle_on_start=false
+# repeat_mode=all

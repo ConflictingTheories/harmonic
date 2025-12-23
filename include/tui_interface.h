@@ -119,7 +119,8 @@ private:
         } else {
             std::cout << "║   [Space] Play/Pause    [N] Next    [P] Previous               ║\n";
             std::cout << "║   [S] Shuffle           [L] List    [T] Theme                  ║\n";
-            
+            std::cout << "║   [M] Mute                                                    ║\n";
+
             if (config.mode == PlaybackMode::DJ) {
                 std::cout << "║   [C] Cue Next          [Q] Queue                              ║\n";
             }

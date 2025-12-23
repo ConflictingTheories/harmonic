@@ -359,7 +359,15 @@ private:
         <div><span class="label">Theme:</span><span class="value">)" << config.get_theme_string() << R"(</span></div>
         <div><span class="label">FPS:</span><span class="value" id="fps">--</span></div>
     </div>
-    <audio id="audio" controls autoplay>
+
+    <!-- Technical Control Panel -->
+    <div id="controls">
+        <button id="playPauseBtn" class="control-btn">▶ PLAY</button>
+        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
+        <button id="muteBtn" class="control-btn">🔊 MUTE</button>
+    </div>
+
+    <audio id="audio" controls>
         <source src="/stream" type="audio/wav">
     </audio>
     <script>
@@ -415,10 +423,56 @@ private:
         }
         setInterval(updateTheme, 500); // Update every 500ms
         
-        // Initialize audio playback
-        setTimeout(() => {
-            audio.play().catch(e => console.log('Audio autoplay blocked, click to start'));
-        }, 100);
+        // Control panel functionality
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const muteBtn = document.getElementById('muteBtn');
+
+        let isPlaying = false;
+        let isMuted = false;
+        let lastVolume = 1;
+
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audio.pause();
+                playPauseBtn.textContent = '▶ PLAY';
+                isPlaying = false;
+            } else {
+                audio.play().catch(e => console.log('Playback failed:', e));
+                playPauseBtn.textContent = '⏸ PAUSE';
+                isPlaying = true;
+            }
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = parseFloat(e.target.value);
+            audio.volume = volume;
+            if (volume === 0) {
+                muteBtn.textContent = '🔇 MUTED';
+                isMuted = true;
+            } else if (isMuted) {
+                muteBtn.textContent = '🔊 MUTE';
+                isMuted = false;
+            }
+        });
+
+        muteBtn.addEventListener('click', () => {
+            if (isMuted) {
+                audio.volume = lastVolume;
+                volumeSlider.value = lastVolume;
+                muteBtn.textContent = '🔊 MUTE';
+                isMuted = false;
+            } else {
+                lastVolume = audio.volume;
+                audio.volume = 0;
+                volumeSlider.value = 0;
+                muteBtn.textContent = '🔇 MUTED';
+                isMuted = true;
+            }
+        });
+
+        // Initialize audio playback (no autoplay)
+        // User must click PLAY to start
         
         // FPS counter
         function updateFPS() {
