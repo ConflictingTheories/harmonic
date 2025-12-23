@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Music Visualizer</title>
+    <meta charset="utf-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            border: 2px solid #333;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #info div { margin: 5px 0; }
+        .label { color: #888; display: inline-block; width: 80px; }
+        .value { color: #0ff; font-weight: bold; }
+        #audio { display: none; }
+    </style>
+</head>
+<body>
+    <canvas id="visualizer"></canvas>
+    <div id="info">
+        <div><span class="label">Track:</span><span class="value" id="track">Loading...</span></div>
+        <div><span class="label">Mode:</span><span class="value">{{MODE}}</span></div>
+        <div><span class="label">Theme:</span><span class="value">{{THEME}}</span></div>
+        <div><span class="label">FPS:</span><span class="value" id="fps">--</span></div>
+    </div>
+
+    <!-- Technical Control Panel -->
+    <div id="controls">
+        <button id="playPauseBtn" class="control-btn">▶ PLAY</button>
+        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
+        <button id="muteBtn" class="control-btn">🔊 MUTE</button>
+    </div>
+
+    <audio id="audio" controls>
+        <source src="/stream" type="audio/wav">
+    </audio>
+    <script>
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const audio = document.getElementById('audio');
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+        
+        let audioData = { bass: 0, mid: 0, treble: 0, energy: 0, magnitudes: new Array(64).fill(0) };
+        let trackData = { title: "Loading...", artist: "", album: "", duration: 0 };
+        let currentTheme = '{{THEME_PARAM}}';
+        let frameCount = 0;
+        let lastFpsUpdate = Date.now();
+        let fps = 0;
+        
+        // Fetch FFT data from server
+        function updateAudioData() {
+            fetch('/api/fft')
+                .then(r => r.json())
+                .then(data => {
+                    audioData = data;
+                })
+                .catch(e => {});
+        }
+        setInterval(updateAudioData, 50); // 20Hz update rate
+        
+        // Fetch track data from server
+        function updateTrackData() {
+            fetch('/api/track')
+                .then(r => r.json())
+                .then(data => {
+                    trackData = data;
+                    document.getElementById('track').textContent = trackData.title;
+                })
+                .catch(e => {});
+        }
+        setInterval(updateTrackData, 1000); // Update every second
+        
+        // Fetch theme data from server
+        function updateTheme() {
+            fetch('/api/theme')
+                .then(r => r.json())
+                .then(data => {
+                    currentTheme = data.theme;
+                })
+                .catch(e => {});
+        }
+        setInterval(updateTheme, 500); // Update every 500ms
+        
+        // Control panel functionality
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const muteBtn = document.getElementById('muteBtn');
+
+        let isPlaying = false;
+        let isMuted = false;
+        let lastVolume = 1;
+
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audio.pause();
+                playPauseBtn.textContent = '▶ PLAY';
+                isPlaying = false;
+            } else {
+                audio.play().catch(e => console.log('Playback failed:', e));
+                playPauseBtn.textContent = '⏸ PAUSE';
+                isPlaying = true;
+            }
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = parseFloat(e.target.value);
+            audio.volume = volume;
+            if (volume === 0) {
+                muteBtn.textContent = '🔇 MUTED';
+                isMuted = true;
+            } else if (isMuted) {
+                muteBtn.textContent = '🔊 MUTE';
+                isMuted = false;
+            }
+        });
+
+        muteBtn.addEventListener('click', () => {
+            if (isMuted) {
+                audio.volume = lastVolume;
+                volumeSlider.value = lastVolume;
+                muteBtn.textContent = '🔊 MUTE';
+                isMuted = false;
+            } else {
+                lastVolume = audio.volume;
+                audio.volume = 0;
+                volumeSlider.value = 0;
+                muteBtn.textContent = '🔇 MUTED';
+                isMuted = true;
+            }
+        });
+
+        // Initialize audio playback (no autoplay)
+        // User must click PLAY to start
+        
+        // FPS counter
+        function updateFPS() {
+            frameCount++;
+            const now = Date.now();
+            if (now - lastFpsUpdate >= 1000) {
+                fps = frameCount;
+                document.getElementById('fps').textContent = fps;
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+        }
+        
+        // Main render loop
+        function render() {
+            updateFPS();
+            
+            if (currentTheme === 'cyberpunk') {
+                renderCyberpunk();
+            } else if (currentTheme === 'forest') {
+                renderForest();
+            } else if (currentTheme === 'netherworld') {
+                renderNetherworld();
+            }
+            
+            requestAnimationFrame(render);
+        }
+        
+        // Cyberpunk Coffee Shop Theme
+        function renderCyberpunk() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const bars = audioData.magnitudes.length;
+            const barWidth = canvas.width / bars;
+            
+            for (let i = 0; i < bars; i++) {
+                const height = audioData.magnitudes[i] * canvas.height * 0.7;
+                const x = i * barWidth;
+                const y = canvas.height - height;
+                
+                const gradient = ctx.createLinearGradient(x, y, x, canvas.height);
+                gradient.addColorStop(0, '#ff00ff');
+                gradient.addColorStop(0.5, '#00ffff');
+                gradient.addColorStop(1, '#ff00ff');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x + 1, y, barWidth - 2, height);
+                
+                // Glow effect
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#0ff';
+                ctx.fillRect(x + 1, y, barWidth - 2, height);
+                ctx.shadowBlur = 0;
+            }
+            
+            // Coffee cup
+            const cupX = canvas.width - 100;
+            const cupY = canvas.height - 80;
+            const steam = audioData.energy * 3;
+            
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(cupX, cupY, 60, 50);
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(cupX + 5, cupY + 5, 50, 40);
+            
+            // Steam particles
+            for (let i = 0; i < 3; i++) {
+                ctx.globalAlpha = 0.4 * steam;
+                ctx.fillStyle = '#fff';
+                const steamX = cupX + 20 + i * 10;
+                const steamY = cupY - 10 - steam * 15 + Math.sin(Date.now() * 0.003 + i) * 10;
+                ctx.beginPath();
+                ctx.arc(steamX, steamY, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+        
+        // Pixel Forest Theme
+        let treeOffsets = new Array(30).fill(0).map(() => Math.random() * Math.PI * 2);
+        let fireflies = [];
+        
+        function renderForest() {
+            ctx.fillStyle = 'rgba(0, 20, 10, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const treeCount = 30;
+            const time = Date.now() * 0.001;
+            
+            for (let i = 0; i < treeCount; i++) {
+                const x = (i / treeCount) * canvas.width;
+                const sway = Math.sin(time + treeOffsets[i]) * audioData.bass * 15;
+                const treeX = x + sway;
+                
+                const baseHeight = canvas.height * 0.4;
+                const reactiveHeight = audioData.magnitudes[i % audioData.magnitudes.length] * 150;
+                const height = baseHeight + reactiveHeight;
+                
+                // Tree trunk
+                ctx.fillStyle = '#2d5016';
+                ctx.fillRect(treeX - 8, canvas.height - height, 16, height);
+                
+                // Leaves
+                ctx.fillStyle = '#4a7c2c';
+                ctx.fillRect(treeX - 25, canvas.height - height - 40, 50, 40);
+                ctx.fillRect(treeX - 20, canvas.height - height - 60, 40, 25);
+            }
+            
+            // Fireflies
+            if (Math.random() < 0.15 && fireflies.length < 100) {
+                fireflies.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height * 0.7,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    brightness: Math.random(),
+                    life: 100
+                });
+            }
+            
+            fireflies = fireflies.filter(f => f.life > 0);
+            fireflies.forEach(f => {
+                f.x += f.vx;
+                f.y += f.vy;
+                f.life -= 0.5;
+                f.brightness = 0.5 + Math.sin(Date.now() * 0.01 + f.x) * 0.5;
+                
+                const alpha = (f.life / 100) * f.brightness;
+                ctx.fillStyle = `rgba(255, 255, 150, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(255, 255, 150, 0.8)';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+        
+        // Demonic Netherworld Theme
+        let flames = [];
+        
+        function renderNetherworld() {
+            ctx.fillStyle = 'rgba(15, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Waveform
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff0000';
+            ctx.beginPath();
+            
+            for (let i = 0; i < audioData.magnitudes.length; i++) {
+                const x = (i / audioData.magnitudes.length) * canvas.width;
+                const y = canvas.height / 2 + (audioData.magnitudes[i] - 0.5) * canvas.height * 0.5;
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Pulsing pentagram
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = 80 + audioData.energy * 80;
+            
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff0000';
+            ctx.beginPath();
+            
+            for (let i = 0; i <= 5; i++) {
+                const angle = (i * 144 - 90) * Math.PI / 180;
+                const x = cx + radius * Math.cos(angle);
+                const y = cy + radius * Math.sin(angle);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Flames
+            if (audioData.bass > 0.2) {
+                for (let i = 0; i < 8; i++) {
+                    flames.push({
+                        x: Math.random() * canvas.width,
+                        y: canvas.height,
+                        vy: -(3 + Math.random() * 4),
+                        vx: (Math.random() - 0.5) * 2,
+                        size: 8 + Math.random() * 15,
+                        life: 60
+                    });
+                }
+            }
+            
+            flames = flames.filter(f => f.life > 0);
+            flames.forEach(f => {
+                f.y += f.vy;
+                f.x += f.vx;
+                f.vy += 0.1; // gravity
+                f.life--;
+                
+                const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+                gradient.addColorStop(0, `rgba(255, 150, 0, ${f.life / 60})`);
+                gradient.addColorStop(0.5, `rgba(255, 50, 0, ${f.life / 80})`);
+                gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        // Start rendering
+        render();
+        
+        console.log('Visualizer initialized - Theme:', theme);
+    </script>
+</body>
+</html>
