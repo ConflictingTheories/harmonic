@@ -1,0 +1,85 @@
+// main.cpp - Entry point and core architecture
+#include <iostream>
+#include <memory>
+#include <thread>
+#include <atomic>
+#include <signal.h>
+
+#include "audio_engine.h"
+#include "playlist_manager.h"
+#include "network_server.h"
+#include "tui_interface.h"
+#include "config.h"
+
+std::atomic<bool> g_running(true);
+
+void signal_handler(int signal) {
+    g_running = false;
+}
+
+int main(int argc, char** argv) {
+    // Setup signal handlers
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    
+    // Load configuration
+    Config config;
+    if (argc > 1) {
+        config.load_from_file(argv[1]);
+    } else {
+        config.load_defaults();
+    }
+    
+    std::cout << "🎵 Music Streaming Platform Starting...\n";
+    std::cout << "Mode: " << config.get_mode_string() << "\n";
+    std::cout << "Web UI: http://localhost:" << config.web_port << "\n\n";
+    
+    try {
+        // Initialize core components
+        auto audio_engine = std::make_shared<AudioEngine>(config);
+        auto playlist_mgr = std::make_shared<PlaylistManager>(config);
+        auto network_srv = std::make_shared<NetworkServer>(config, audio_engine);
+        auto tui = std::make_shared<TUIInterface>(config, audio_engine, playlist_mgr);
+        
+        // Set up mode-specific behavior
+        switch (config.mode) {
+            case PlaybackMode::RADIO:
+                playlist_mgr->set_auto_advance(true);
+                break;
+            case PlaybackMode::DJ:
+                playlist_mgr->set_auto_advance(true);
+                playlist_mgr->enable_cue_system(true);
+                break;
+            case PlaybackMode::CODER:
+                audio_engine->enable_live_coding(true);
+                break;
+        }
+        
+        // Start network server in separate thread
+        std::thread server_thread([&network_srv]() {
+            network_srv->start();
+        });
+        
+        // Start audio engine
+        audio_engine->start();
+        
+        // Run TUI on main thread
+        tui->run();
+        
+        // Cleanup
+        g_running = false;
+        network_srv->stop();
+        audio_engine->stop();
+        
+        if (server_thread.joinable()) {
+            server_thread.join();
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    std::cout << "\n👋 Goodbye!\n";
+    return 0;
+}
