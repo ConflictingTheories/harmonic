@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
         auto playlist_mgr = std::make_shared<PlaylistManager>(config);
         auto network_srv = std::make_shared<NetworkServer>(config, audio_engine);
         auto tui = std::make_shared<TUIInterface>(config, audio_engine, playlist_mgr);
-        
+
         // Set up mode-specific behavior
         switch (config.mode) {
             case PlaybackMode::RADIO:
@@ -54,27 +54,39 @@ int main(int argc, char** argv) {
                 audio_engine->enable_live_coding(true);
                 break;
         }
-        
+
+        // Automatically play the first sample in the music directory
+        Track* first_track = playlist_mgr->get_current_track();
+        if (first_track && !first_track->filepath.empty()) {
+            if (audio_engine->load_track(first_track->filepath)) {
+                std::cout << "Now playing: " << first_track->title << " by " << first_track->artist << std::endl;
+            } else {
+                std::cerr << "Failed to load track: " << first_track->filepath << std::endl;
+            }
+        } else {
+            std::cerr << "No tracks found in music directory." << std::endl;
+        }
+
         // Start network server in separate thread
         std::thread server_thread([&network_srv]() {
             network_srv->start();
         });
-        
+
         // Start audio engine
         audio_engine->start();
-        
+
         // Run TUI on main thread
         tui->run();
-        
+
         // Cleanup
         g_running = false;
         network_srv->stop();
         audio_engine->stop();
-        
+
         if (server_thread.joinable()) {
             server_thread.join();
         }
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
         return 1;

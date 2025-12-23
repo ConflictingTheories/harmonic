@@ -44,6 +44,7 @@ set(SOURCES
     src/dj_cue_system.cpp
     src/coder_mode.cpp
     src/fft.cpp
+    src/miniaudio_impl.cpp
 )
 
 set(HEADERS

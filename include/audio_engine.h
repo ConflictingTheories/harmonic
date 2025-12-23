@@ -2,7 +2,7 @@
 #ifndef AUDIO_ENGINE_H
 #define AUDIO_ENGINE_H
 
-#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
 #include "miniaudio.h"
 #include "fft.h"
 #include "coder_mode.h"
