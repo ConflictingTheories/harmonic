@@ -1,10 +1,17 @@
-112<!DOCTYPE html>
+112
+<!DOCTYPE html>
 <html>
+
 <head>
     <title>Music Visualizer</title>
     <meta charset="utf-8">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             overflow: hidden;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
@@ -14,6 +21,7 @@
             align-items: center;
             min-height: 100vh;
         }
+
         #visualizer-container {
             position: relative;
             width: 90vw;
@@ -24,28 +32,43 @@
             box-shadow: 0 0 50px rgba(0, 255, 255, 0.3);
             background: rgba(0, 0, 0, 0.9);
         }
+
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            filter: none; /* Will be set dynamically */
+            filter: none;
+            /* Will be set dynamically */
         }
+
         #info {
             position: absolute;
             top: 20px;
             left: 20px;
             color: #fff;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.8);
             padding: 15px 20px;
             border-radius: 8px;
             font-size: 14px;
             line-height: 1.6;
             border: 2px solid #333;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
-        #info div { margin: 5px 0; }
-        .label { color: #888; display: inline-block; width: 80px; }
-        .value { color: #0ff; font-weight: bold; }
+
+        #info div {
+            margin: 5px 0;
+        }
+
+        .label {
+            color: #888;
+            display: inline-block;
+            width: 80px;
+        }
+
+        .value {
+            color: #0ff;
+            font-weight: bold;
+        }
 
         #controls {
             position: absolute;
@@ -55,12 +78,13 @@
             display: flex;
             gap: 20px;
             align-items: center;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.8);
             padding: 15px 25px;
             border-radius: 25px;
             border: 2px solid #333;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
+
         .control-btn {
             background: linear-gradient(45deg, #ff00ff, #00ffff);
             border: none;
@@ -73,10 +97,12 @@
             transition: all 0.3s ease;
             box-shadow: 0 2px 10px rgba(255, 0, 255, 0.3);
         }
+
         .control-btn:hover {
             transform: scale(1.05);
             box-shadow: 0 4px 20px rgba(255, 0, 255, 0.5);
         }
+
         .volume-slider {
             -webkit-appearance: none;
             appearance: none;
@@ -87,6 +113,7 @@
             outline: none;
             transition: background 0.3s ease;
         }
+
         .volume-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -97,6 +124,7 @@
             cursor: pointer;
             box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
         }
+
         .volume-slider::-moz-range-thumb {
             width: 20px;
             height: 20px;
@@ -107,14 +135,25 @@
             box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
         }
 
-        #audio { display: none; }
+        #audio {
+            display: none;
+        }
 
         /* Filter effects for themes */
-        .filter-cyberpunk { filter: hue-rotate(180deg) saturate(1.5) brightness(1.2); }
-        .filter-forest { filter: sepia(0.3) hue-rotate(90deg) saturate(1.8) brightness(0.9); }
-        .filter-netherworld { filter: hue-rotate(0deg) saturate(2) brightness(0.8) contrast(1.2); }
+        .filter-cyberpunk {
+            filter: hue-rotate(180deg) saturate(1.5) brightness(1.2);
+        }
+
+        .filter-forest {
+            filter: sepia(0.3) hue-rotate(90deg) saturate(1.8) brightness(0.9);
+        }
+
+        .filter-netherworld {
+            filter: hue-rotate(0deg) saturate(2) brightness(0.8) contrast(1.2);
+        }
     </style>
 </head>
+
 <body>
     <div id="visualizer-container">
         <canvas id="visualizer"></canvas>
@@ -130,7 +169,7 @@
             <button id="playPauseBtn" class="control-btn">▶ PLAY</button>
             <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
             <button id="muteBtn" class="control-btn">🔊 MUTE</button>
-                <button id="serverMuteBtn" class="control-btn">🔈 SERVER MUTE</button>
+            <button id="serverMuteBtn" class="control-btn">🔈 SERVER MUTE</button>
         </div>
     </div>
 
@@ -141,21 +180,21 @@
         const canvas = document.getElementById('visualizer');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('audio');
-        
+
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         }
         resize();
         window.addEventListener('resize', resize);
-        
+
         let audioData = { bass: 0, mid: 0, treble: 0, energy: 0, magnitudes: new Array(64).fill(0) };
         let trackData = { title: "Loading...", artist: "", album: "", duration: 0 };
         let currentTheme = '{{THEME_PARAM}}';
         let frameCount = 0;
         let lastFpsUpdate = Date.now();
         let fps = 0;
-        
+
         // Fetch FFT data from server (fallback for polling)
         function fetchFFTData() {
             fetch('/api/fft')
@@ -163,7 +202,7 @@
                 .then(data => {
                     updateVisualizer(data);
                 })
-                .catch(e => {});
+                .catch(e => { });
         }
 
         // Update visualizer with FFT data
@@ -176,11 +215,11 @@
             if (typeof WebSocket !== 'undefined') {
                 const ws = new WebSocket('ws://' + window.location.host.replace('8080', '8081') + '/ws/fft');
 
-                ws.onopen = function(event) {
+                ws.onopen = function (event) {
                     console.log('WebSocket connected for FFT data');
                 };
 
-                ws.onmessage = function(event) {
+                ws.onmessage = function (event) {
                     try {
                         const fftData = JSON.parse(event.data);
                         updateVisualizer(fftData);
@@ -189,13 +228,13 @@
                     }
                 };
 
-                ws.onclose = function(event) {
+                ws.onclose = function (event) {
                     console.log('WebSocket closed, falling back to polling');
                     // Fallback to polling
                     setInterval(fetchFFTData, 50);
                 };
 
-                ws.onerror = function(error) {
+                ws.onerror = function (error) {
                     console.error('WebSocket error:', error);
                     // Fallback to polling
                     setInterval(fetchFFTData, 50);
@@ -208,7 +247,7 @@
 
         // Initialize WebSocket or start polling
         initWebSocket();
-        
+
         // Fetch track data from server
         function updateTrackData() {
             fetch('/api/track')
@@ -217,10 +256,10 @@
                     trackData = data;
                     document.getElementById('track').textContent = trackData.title;
                 })
-                .catch(e => {});
+                .catch(e => { });
         }
         setInterval(updateTrackData, 1000); // Update every second
-        
+
         // Fetch theme data from server
         function updateTheme() {
             fetch('/api/theme')
@@ -228,10 +267,10 @@
                 .then(data => {
                     currentTheme = data.theme;
                 })
-                .catch(e => {});
+                .catch(e => { });
         }
         setInterval(updateTheme, 500); // Update every 500ms
-        
+
         // Control panel functionality
         const playPauseBtn = document.getElementById('playPauseBtn');
         const volumeSlider = document.getElementById('volumeSlider');
@@ -307,7 +346,7 @@
         // (removed stray closing brace)
 
         // Initialize WebSocket connection
-    // initWebSocket(); // Disabled - WebSocket not available
+        // initWebSocket(); // Disabled - WebSocket not available
 
         // Initialize audio playback (no autoplay)
         // User must click PLAY to start
@@ -359,45 +398,45 @@
 
             requestAnimationFrame(render);
         }
-        
+
         // Cyberpunk Coffee Shop Theme
         function renderCyberpunk() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+
             const bars = audioData.magnitudes.length;
             const barWidth = canvas.width / bars;
-            
+
             for (let i = 0; i < bars; i++) {
                 const height = audioData.magnitudes[i] * canvas.height * 0.7;
                 const x = i * barWidth;
                 const y = canvas.height - height;
-                
+
                 const gradient = ctx.createLinearGradient(x, y, x, canvas.height);
                 gradient.addColorStop(0, '#ff00ff');
                 gradient.addColorStop(0.5, '#00ffff');
                 gradient.addColorStop(1, '#ff00ff');
-                
+
                 ctx.fillStyle = gradient;
                 ctx.fillRect(x + 1, y, barWidth - 2, height);
-                
+
                 // Glow effect
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = '#0ff';
                 ctx.fillRect(x + 1, y, barWidth - 2, height);
                 ctx.shadowBlur = 0;
             }
-            
+
             // Coffee cup
             const cupX = canvas.width - 100;
             const cupY = canvas.height - 80;
             const steam = audioData.energy * 3;
-            
+
             ctx.fillStyle = '#8b4513';
             ctx.fillRect(cupX, cupY, 60, 50);
             ctx.fillStyle = '#654321';
             ctx.fillRect(cupX + 5, cupY + 5, 50, 40);
-            
+
             // Steam particles
             for (let i = 0; i < 3; i++) {
                 ctx.globalAlpha = 0.4 * steam;
@@ -410,37 +449,37 @@
             }
             ctx.globalAlpha = 1;
         }
-        
+
         // Pixel Forest Theme
         let treeOffsets = new Array(30).fill(0).map(() => Math.random() * Math.PI * 2);
         let fireflies = [];
-        
+
         function renderForest() {
             ctx.fillStyle = 'rgba(0, 20, 10, 0.2)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+
             const treeCount = 30;
             const time = Date.now() * 0.001;
-            
+
             for (let i = 0; i < treeCount; i++) {
                 const x = (i / treeCount) * canvas.width;
                 const sway = Math.sin(time + treeOffsets[i]) * audioData.bass * 15;
                 const treeX = x + sway;
-                
+
                 const baseHeight = canvas.height * 0.4;
                 const reactiveHeight = audioData.magnitudes[i % audioData.magnitudes.length] * 150;
                 const height = baseHeight + reactiveHeight;
-                
+
                 // Tree trunk
                 ctx.fillStyle = '#2d5016';
                 ctx.fillRect(treeX - 8, canvas.height - height, 16, height);
-                
+
                 // Leaves
                 ctx.fillStyle = '#4a7c2c';
                 ctx.fillRect(treeX - 25, canvas.height - height - 40, 50, 40);
                 ctx.fillRect(treeX - 20, canvas.height - height - 60, 40, 25);
             }
-            
+
             // Fireflies
             if (Math.random() < 0.15 && fireflies.length < 100) {
                 fireflies.push({
@@ -452,62 +491,62 @@
                     life: 100
                 });
             }
-            
+
             fireflies = fireflies.filter(f => f.life > 0);
             fireflies.forEach(f => {
                 f.x += f.vx;
                 f.y += f.vy;
                 f.life -= 0.5;
                 f.brightness = 0.5 + Math.sin(Date.now() * 0.01 + f.x) * 0.5;
-                
+
                 const alpha = (f.life / 100) * f.brightness;
                 ctx.fillStyle = `rgba(255, 255, 150, ${alpha})`;
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, 3, 0, Math.PI * 2);
                 ctx.fill();
-                
+
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = 'rgba(255, 255, 150, 0.8)';
                 ctx.fill();
                 ctx.shadowBlur = 0;
             });
         }
-        
+
         // Demonic Netherworld Theme
         let flames = [];
-        
+
         function renderNetherworld() {
             ctx.fillStyle = 'rgba(15, 0, 0, 0.2)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+
             // Waveform
             ctx.strokeStyle = '#ff0000';
             ctx.lineWidth = 4;
             ctx.shadowBlur = 15;
             ctx.shadowColor = '#ff0000';
             ctx.beginPath();
-            
+
             for (let i = 0; i < audioData.magnitudes.length; i++) {
                 const x = (i / audioData.magnitudes.length) * canvas.width;
                 const y = canvas.height / 2 + (audioData.magnitudes[i] - 0.5) * canvas.height * 0.5;
-                
+
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
             ctx.shadowBlur = 0;
-            
+
             // Pulsing pentagram
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
             const radius = 80 + audioData.energy * 80;
-            
+
             ctx.strokeStyle = '#ff0000';
             ctx.lineWidth = 3;
             ctx.shadowBlur = 20;
             ctx.shadowColor = '#ff0000';
             ctx.beginPath();
-            
+
             for (let i = 0; i <= 5; i++) {
                 const angle = (i * 144 - 90) * Math.PI / 180;
                 const x = cx + radius * Math.cos(angle);
@@ -517,7 +556,7 @@
             }
             ctx.stroke();
             ctx.shadowBlur = 0;
-            
+
             // Flames
             if (audioData.bass > 0.2) {
                 for (let i = 0; i < 8; i++) {
@@ -531,26 +570,26 @@
                     });
                 }
             }
-            
+
             flames = flames.filter(f => f.life > 0);
             flames.forEach(f => {
                 f.y += f.vy;
                 f.x += f.vx;
                 f.vy += 0.1; // gravity
                 f.life--;
-                
+
                 const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
                 gradient.addColorStop(0, `rgba(255, 150, 0, ${f.life / 60})`);
                 gradient.addColorStop(0.5, `rgba(255, 50, 0, ${f.life / 80})`);
                 gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-                
+
                 ctx.fillStyle = gradient;
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
                 ctx.fill();
             });
         }
-        
+
         // Start rendering
         render();
         applyThemeFilter(); // Apply initial filter
@@ -558,4 +597,5 @@
         console.log('Visualizer initialized - Theme:', currentTheme);
     </script>
 </body>
+
 </html>
