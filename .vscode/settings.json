@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "*.pxs": "lua",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "fstream": "cpp",
+        "locale": "cpp"
     }
 }

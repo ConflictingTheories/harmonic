@@ -30,19 +30,25 @@ void NetworkServer::init_libshout() {
     shout_set_user(shout_conn, config.stream_user.c_str());
     shout_set_password(shout_conn, config.stream_password.c_str());
 
-    // Set audio format and parameters
-    if (config.stream_format == "mp3") {
-        shout_set_format(shout_conn, SHOUT_FORMAT_MP3);
-    } else if (config.stream_format == "ogg") {
+    // Set audio format and parameters - CRITICAL: libshout encodes audio based on format setting
+    if (config.stream_format == "ogg") {
         shout_set_format(shout_conn, SHOUT_FORMAT_OGG);
+        std::cout << "  → Streaming format: OGG/Vorbis" << std::endl;
     } else {
-        shout_set_format(shout_conn, SHOUT_FORMAT_MP3); // Default to MP3
+        shout_set_format(shout_conn, SHOUT_FORMAT_MP3);
+        std::cout << "  → Streaming format: MP3" << std::endl;
     }
 
     // Set audio parameters for proper encoding
     shout_set_audio_info(shout_conn, SHOUT_AI_SAMPLERATE, std::to_string(config.sample_rate).c_str());
     shout_set_audio_info(shout_conn, SHOUT_AI_CHANNELS, "2"); // Stereo
-    shout_set_audio_info(shout_conn, SHOUT_AI_QUALITY, "4.0"); // Good quality
+    
+    // Quality/bitrate settings based on format
+    if (config.stream_format == "ogg") {
+        shout_set_audio_info(shout_conn, SHOUT_AI_QUALITY, "4.0"); // Vorbis quality (0-10 scale)
+    } else {
+        shout_set_audio_info(shout_conn, SHOUT_AI_BITRATE, "192"); // MP3 bitrate (128-320 kbps)
+    }
 
     shout_set_protocol(shout_conn, SHOUT_PROTOCOL_HTTP);
 
@@ -514,65 +520,75 @@ void NetworkServer::handle_mute_toggle(int client_fd) {
 
 
 void NetworkServer::send_audio_stream(int client_fd) {
-    // WAV header structure
-    struct WAVHeader {
-        char riff[4] = {'R', 'I', 'F', 'F'};
-        uint32_t file_size = 0xFFFFFFFF; // Unknown size for streaming
-        char wave[4] = {'W', 'A', 'V', 'E'};
-        char fmt[4] = {'f', 'm', 't', ' '};
-        uint32_t fmt_size = 16;
-        uint16_t audio_format = 1; // PCM
-        uint16_t num_channels = 2; // Stereo
-        uint32_t sample_rate = 44100;
-        uint32_t byte_rate = 44100 * 2 * 2; // sample_rate * channels * bytes_per_sample
-        uint16_t block_align = 4; // channels * bytes_per_sample
-        uint16_t bits_per_sample = 16;
-        char data[4] = {'d', 'a', 't', 'a'};
-        uint32_t data_size = 0xFFFFFFFF; // Unknown size for streaming
-    } __attribute__((packed));
+    // Stream the currently playing MP3 file directly from disk
+    Track* current_track = playlist_mgr->get_current_track();
+    
+    if (!current_track || current_track->filepath.empty()) {
+        // No track loaded - send 404
+        std::string response = 
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 16\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "No track loaded.";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
 
-    WAVHeader header;
-    header.sample_rate = config.sample_rate;
-    header.byte_rate = config.sample_rate * 2 * 2;
+    // Open the MP3 file
+    std::ifstream mp3_file(current_track->filepath, std::ios::binary);
+    if (!mp3_file.is_open()) {
+        std::string response = 
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 19\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "File not found.";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
 
-    // Send HTTP headers
+    // Get file size
+    mp3_file.seekg(0, std::ios::end);
+    std::streampos file_size = mp3_file.tellg();
+    mp3_file.seekg(0, std::ios::beg);
+
+    // Send HTTP headers with correct content length
     std::stringstream response;
     response << "HTTP/1.1 200 OK\r\n";
-    response << "Content-Type: audio/wav\r\n";
+    response << "Content-Type: audio/mpeg\r\n";
+    response << "Content-Length: " << file_size << "\r\n";
+    response << "Accept-Ranges: bytes\r\n";
     response << "Connection: keep-alive\r\n";
     response << "Cache-Control: no-cache\r\n";
-    response << "Accept-Ranges: none\r\n";
+    response << "icy-name: " << current_track->title << "\r\n";
+    response << "icy-description: " << current_track->artist << "\r\n";
     response << "\r\n";
 
     std::string resp_str = response.str();
     send(client_fd, resp_str.c_str(), resp_str.length(), 0);
 
-    // Send WAV header
-    send(client_fd, &header, sizeof(header), 0);
+    // Stream the MP3 file directly
+    const size_t BUFFER_SIZE = 65536; // 64KB chunks
+    char buffer[BUFFER_SIZE];
+    size_t total_sent = 0;
 
-    // Stream audio data
-    const size_t CHUNK_FRAMES = 1024;
-    while (running && audio_engine->is_active()) {
-        std::vector<float> buffer = audio_engine->get_stream_buffer(CHUNK_FRAMES);
-
-        if (buffer.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
+    while (mp3_file.read(buffer, BUFFER_SIZE) || mp3_file.gcount() > 0) {
+        size_t bytes_to_send = mp3_file.gcount();
+        ssize_t sent = send(client_fd, buffer, bytes_to_send, MSG_NOSIGNAL);
+        
+        if (sent < 0) {
+            // Client disconnected
+            break;
         }
-
-        // Convert float32 to int16 PCM
-        std::vector<int16_t> pcm_data(buffer.size());
-        for (size_t i = 0; i < buffer.size(); ++i) {
-            float sample = std::max(-1.0f, std::min(1.0f, buffer[i]));
-            pcm_data[i] = static_cast<int16_t>(sample * 32767.0f);
-        }
-
-        // Send PCM data
-        ssize_t sent = send(client_fd, pcm_data.data(), pcm_data.size() * sizeof(int16_t), MSG_NOSIGNAL);
-        if (sent <= 0) break; // Client disconnected
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        
+        total_sent += sent;
     }
+
+    mp3_file.close();
+    std::cout << "✓ MP3 stream delivered: " << current_track->title << " (" << total_sent << " bytes)" << std::endl;
 }
 
 void NetworkServer::send_404(int client_fd) {
