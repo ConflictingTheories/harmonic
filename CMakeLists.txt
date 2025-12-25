@@ -5,6 +5,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Set policy to suppress CMP0167 warnings - use custom FindBoost
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
+
+# Set Boost root for Homebrew installation
+set(Boost_NO_BOOST_CMAKE ON)
+set(Boost_ROOT "/opt/homebrew/opt/boost")
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
+
 # Platform detection
 if(WIN32)
     add_definitions(-D_WIN32_WINNT=0x0600)
@@ -31,6 +43,80 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/dr_flac.h")
 endif()
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/dr_wav.h")
     file(DOWNLOAD "${DR_WAV_URL}" "${CMAKE_CURRENT_SOURCE_DIR}/include/dr_wav.h")
+endif()
+
+# Download websocketpp header-only library
+set(WEBSOCKETPP_URL "https://raw.githubusercontent.com/zaphoyd/websocketpp/develop/websocketpp/websocketpp.hpp")
+set(WEBSOCKETPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/websocketpp.hpp")
+if(NOT EXISTS "${WEBSOCKETPP_PATH}")
+    message(STATUS "Downloading websocketpp...")
+    file(DOWNLOAD "${WEBSOCKETPP_URL}" "${WEBSOCKETPP_PATH}" SHOW_PROGRESS)
+endif()
+
+# Check for Boost (required for WebSocket++)
+# Try to find Boost with specific component names
+find_package(Boost 1.65.0 COMPONENTS system thread QUIET)
+
+# If components not found, try simpler find without REQUIRED
+if(NOT Boost_FOUND)
+    find_package(Boost 1.65.0 QUIET)
+endif()
+
+# If still not found, try with MODULE mode
+if(NOT Boost_FOUND)
+    find_package(Boost NO_MODULE QUIET)
+endif()
+
+if(Boost_FOUND)
+    message(STATUS "✓ Boost found - WebSocket functionality ENABLED")
+    message(STATUS "  Boost include: ${Boost_INCLUDE_DIRS}")
+    message(STATUS "  Boost libraries: ${Boost_LIBRARIES}")
+    include_directories(${Boost_INCLUDE_DIRS})
+    add_definitions(-DHAS_WEBSOCKETPP)
+else()
+    # Try manual fallback for Homebrew
+    find_path(BOOST_INCLUDE_DIR boost/version.hpp PATHS /opt/homebrew/opt/boost/include)
+    if(BOOST_INCLUDE_DIR)
+        message(STATUS "✓ Boost found via manual search - WebSocket functionality ENABLED")
+        include_directories(${BOOST_INCLUDE_DIR})
+        add_definitions(-DHAS_WEBSOCKETPP)
+        set(Boost_FOUND TRUE)
+    else()
+        message(FATAL_ERROR "✗ Boost not found! Install via: brew install boost")
+    endif()
+endif()
+
+# Find pkg-config for system libraries
+find_package(PkgConfig REQUIRED)
+
+# Find libshout (streaming support)
+pkg_check_modules(LIBSHOUT REQUIRED shout)
+if(LIBSHOUT_FOUND)
+    message(STATUS "✓ libshout found - streaming ENABLED")
+    include_directories(${LIBSHOUT_INCLUDE_DIRS})
+    link_directories(${LIBSHOUT_LIBRARY_DIRS})
+else()
+    message(FATAL_ERROR "✗ libshout not found! Install via: brew install libshout")
+endif()
+
+# Find libvorbis and libvorbisenc (OGG encoding)
+pkg_check_modules(LIBVORBIS REQUIRED vorbis vorbisenc)
+if(LIBVORBIS_FOUND)
+    message(STATUS "✓ libvorbis found - OGG encoding ENABLED")
+    include_directories(${LIBVORBIS_INCLUDE_DIRS})
+    link_directories(${LIBVORBIS_LIBRARY_DIRS})
+else()
+    message(FATAL_ERROR "✗ libvorbis not found! Install via: brew install libvorbis")
+endif()
+
+# Find libogg (OGG container format)
+pkg_check_modules(LIBOGG REQUIRED ogg)
+if(LIBOGG_FOUND)
+    message(STATUS "✓ libogg found - OGG container support ENABLED")
+    include_directories(${LIBOGG_INCLUDE_DIRS})
+    link_directories(${LIBOGG_LIBRARY_DIRS})
+else()
+    message(FATAL_ERROR "✗ libogg not found! Install via: brew install libogg")
 endif()
 
 # Source files
@@ -72,6 +158,41 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Platform-specific libraries
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
+
+# Boost for WebSocket++ (already found above)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${Boost_LIBRARIES})
+
+# Link libshout
+if(LIBSHOUT_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBSHOUT_LIBRARIES})
+else()
+    # Fallback for macOS/Homebrew
+    find_library(SHOUT_LIB shout)
+    if(SHOUT_LIB)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${SHOUT_LIB})
+    endif()
+endif()
+
+# Link Vorbis libraries for OGG encoding
+if(LIBVORBIS_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBVORBIS_LIBRARIES})
+else()
+    find_library(VORBIS_LIB vorbis)
+    find_library(VORBISENC_LIB vorbisenc)
+    if(VORBIS_LIB AND VORBISENC_LIB)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${VORBIS_LIB} ${VORBISENC_LIB})
+    endif()
+endif()
+
+# Link libogg for OGG container
+if(LIBOGG_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBOGG_LIBRARIES})
+else()
+    find_library(OGG_LIB ogg)
+    if(OGG_LIB)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${OGG_LIB})
+    endif()
+endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE m pthread dl)

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+112<!DOCTYPE html>
 <html>
 <head>
     <title>Music Visualizer</title>
@@ -130,6 +130,7 @@
             <button id="playPauseBtn" class="control-btn">▶ PLAY</button>
             <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
             <button id="muteBtn" class="control-btn">🔊 MUTE</button>
+                <button id="serverMuteBtn" class="control-btn">🔈 SERVER MUTE</button>
         </div>
     </div>
 
@@ -155,16 +156,58 @@
         let lastFpsUpdate = Date.now();
         let fps = 0;
         
-        // Fetch FFT data from server
-        function updateAudioData() {
+        // Fetch FFT data from server (fallback for polling)
+        function fetchFFTData() {
             fetch('/api/fft')
                 .then(r => r.json())
                 .then(data => {
-                    audioData = data;
+                    updateVisualizer(data);
                 })
                 .catch(e => {});
         }
-        setInterval(updateAudioData, 50); // 20Hz update rate
+
+        // Update visualizer with FFT data
+        function updateVisualizer(data) {
+            audioData = data;
+        }
+
+        // Initialize WebSocket connection for FFT data
+        function initWebSocket() {
+            if (typeof WebSocket !== 'undefined') {
+                const ws = new WebSocket('ws://' + window.location.host.replace('8080', '8081') + '/ws/fft');
+
+                ws.onopen = function(event) {
+                    console.log('WebSocket connected for FFT data');
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const fftData = JSON.parse(event.data);
+                        updateVisualizer(fftData);
+                    } catch (e) {
+                        console.error('Error parsing FFT data:', e);
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    console.log('WebSocket closed, falling back to polling');
+                    // Fallback to polling
+                    setInterval(fetchFFTData, 50);
+                };
+
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    // Fallback to polling
+                    setInterval(fetchFFTData, 50);
+                };
+            } else {
+                console.log('WebSocket not supported, using polling');
+                setInterval(fetchFFTData, 50);
+            }
+        }
+
+        // Initialize WebSocket or start polling
+        initWebSocket();
         
         // Fetch track data from server
         function updateTrackData() {
@@ -197,6 +240,7 @@
         let isPlaying = false;
         let isMuted = false;
         let lastVolume = 1;
+        let isServerMuted = false;
 
         playPauseBtn.addEventListener('click', () => {
             if (isPlaying) {
@@ -236,6 +280,34 @@
                 isMuted = true;
             }
         });
+
+        // Server mute button logic (toggles server mute, separate from local mute)
+        const serverMuteBtn = document.getElementById('serverMuteBtn');
+        function updateServerMuteUI() {
+            serverMuteBtn.textContent = isServerMuted ? '🔈 SERVER MUTED' : '🔈 SERVER MUTE';
+        }
+        function fetchServerMute() {
+            fetch('/api/mute')
+                .then(r => r.json())
+                .then(data => {
+                    isServerMuted = data.muted;
+                    updateServerMuteUI();
+                });
+        }
+        serverMuteBtn.addEventListener('click', () => {
+            fetch('/api/mute', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    isServerMuted = data.muted;
+                    updateServerMuteUI();
+                });
+        });
+        setInterval(fetchServerMute, 1000);
+        fetchServerMute();
+        // (removed stray closing brace)
+
+        // Initialize WebSocket connection
+    // initWebSocket(); // Disabled - WebSocket not available
 
         // Initialize audio playback (no autoplay)
         // User must click PLAY to start

@@ -1,3 +1,4 @@
 build/
 music/*.mp3
 playlists/*.m3u
+*-develop/

@@ -104,6 +104,7 @@ public:
         }
         
         return std::vector<float>(stream_buffer.begin(), stream_buffer.begin() + samples);
+        // Always return the buffer for streaming (mute is local only)
     }
     
     // Get FFT data for visualizer

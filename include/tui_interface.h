@@ -86,9 +86,10 @@ private:
         }
         
         std::cout << "\n";
-        std::cout << "Playlist: " << (playlist_mgr->get_current_index() + 1) 
+        std::cout << "Playlist: " << (playlist_mgr->get_current_index() + 1)
                   << " / " << playlist_mgr->get_track_count() << "          \n";
-        
+        std::cout << "\n";
+
         // Audio levels
         FFTData fft = audio_engine->get_fft_data();
         std::cout << "\n";
@@ -215,9 +216,9 @@ private:
                         coder->set_recording(!coder->is_recording());
                     }
                     break;
-                    
+
                 // Removed duplicate 'l' and 'L' cases
-                    
+
                 case 27:   // Escape
                     running = false;
                     break;

@@ -27,7 +27,18 @@ public:
     int stream_port = 8081;
     int sample_rate = 44100;
     int buffer_size = 512;
-    
+
+    // Streaming server configuration
+    std::string stream_host = "localhost";
+    int stream_server_port = 8000;
+    std::string stream_mount = "/stream";
+    std::string stream_user = "source";
+    std::string stream_password = "hackme";
+    std::string stream_name = "Music Stream Platform";
+    std::string stream_description = "Live music streaming";
+    std::string stream_genre = "Various";
+    std::string stream_format = "mp3"; // "mp3" or "ogg"
+
     std::string music_directory = "./music";
     std::string playlist_file = "";
     
@@ -89,6 +100,24 @@ private:
             stream_port = std::stoi(value);
         } else if (key == "music_directory") {
             music_directory = value;
+        } else if (key == "stream_host") {
+            stream_host = value;
+        } else if (key == "stream_server_port") {
+            stream_server_port = std::stoi(value);
+        } else if (key == "stream_mount") {
+            stream_mount = value;
+        } else if (key == "stream_user") {
+            stream_user = value;
+        } else if (key == "stream_password") {
+            stream_password = value;
+        } else if (key == "stream_name") {
+            stream_name = value;
+        } else if (key == "stream_description") {
+            stream_description = value;
+        } else if (key == "stream_genre") {
+            stream_genre = value;
+        } else if (key == "stream_format") {
+            stream_format = value;
         }
     }
     

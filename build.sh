@@ -13,6 +13,28 @@ if [ ! -f "CMakeLists.txt" ]; then
     exit 1
 fi
 
+# Check and install dependencies on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "Checking macOS dependencies..."
+    
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "Error: Homebrew not found. Install from https://brew.sh"
+        exit 1
+    fi
+    
+    # Check and install required packages
+    declare -a packages=("boost" "libshout" "libogg" "libvorbis" "cmake")
+    
+    for package in "${packages[@]}"; do
+        if ! brew list "$package" &>/dev/null; then
+            echo "Installing $package..."
+            brew install "$package"
+        else
+            echo "✓ $package already installed"
+        fi
+    done
+fi
+
 # Create build directory if it doesn't exist
 if [ ! -d "build" ]; then
     echo "Creating build directory..."
@@ -43,6 +65,6 @@ echo "✅ Build completed successfully!"
 echo "Executable: build/MusicStreamPlatform"
 echo ""
 echo "To run the application:"
-echo "  ./build/MusicStreamPlatform config.dj    # DJ mode"
-echo "  ./build/MusicStreamPlatform config.coder # Coder mode"
-echo "  ./build/MusicStreamPlatform config.radio # Radio mode (if exists)"
+echo "  ./build/MusicStreamPlatform config/dj.config    # DJ mode"
+echo "  ./build/MusicStreamPlatform config/coder.config # Coder mode"
+echo "  ./build/MusicStreamPlatform config/radio.config # Radio mode"
