@@ -222,6 +222,29 @@ void NetworkServer::broadcast_fft_data() {
 }
 #endif
 
+// Stub implementations when WebSocket is disabled
+#ifndef HAS_WEBSOCKETPP
+void NetworkServer::init_websocket_server() {
+    // WebSocket support disabled
+}
+
+void NetworkServer::start_websocket_server() {
+    // WebSocket support disabled
+}
+
+void NetworkServer::stop_websocket_server() {
+    // WebSocket support disabled
+}
+
+void NetworkServer::upgrade_to_websocket(int client_fd, const std::string& request) {
+    // WebSocket support disabled
+}
+
+void NetworkServer::broadcast_fft_data() {
+    // WebSocket support disabled
+}
+#endif
+
 void NetworkServer::start() {
     running = true;
 
@@ -325,6 +348,10 @@ void NetworkServer::handle_client(int client_fd) {
         send_fft_response(client_fd);
     } else if (request.find("GET /api/theme") == 0) {
         send_theme_response(client_fd);
+    } else if (request.find("GET /api/mute") == 0) {
+        send_mute_response(client_fd);
+    } else if (request.find("POST /api/mute") == 0) {
+        handle_mute_toggle(client_fd);
     } else if (request.find("GET /stream") == 0) {
         send_audio_stream(client_fd);
         } else if (request.find("GET /ws/fft") == 0) {
@@ -425,6 +452,49 @@ void NetworkServer::send_theme_response(int client_fd) {
 
     std::stringstream json;
     json << "{\"theme\":\"" << theme_str << "\"}";
+
+    std::string json_str = json.str();
+    std::stringstream response;
+
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Type: application/json\r\n";
+    response << "Content-Length: " << json_str.length() << "\r\n";
+    response << "Access-Control-Allow-Origin: *\r\n";
+    response << "Connection: close\r\n";
+    response << "\r\n";
+    response << json_str;
+
+    std::string resp_str = response.str();
+    send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+}
+
+void NetworkServer::send_mute_response(int client_fd) {
+    bool is_muted = audio_engine->is_muted();
+
+    std::stringstream json;
+    json << "{\"muted\":" << (is_muted ? "true" : "false") << "}";
+
+    std::string json_str = json.str();
+    std::stringstream response;
+
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Type: application/json\r\n";
+    response << "Content-Length: " << json_str.length() << "\r\n";
+    response << "Access-Control-Allow-Origin: *\r\n";
+    response << "Connection: close\r\n";
+    response << "\r\n";
+    response << json_str;
+
+    std::string resp_str = response.str();
+    send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+}
+
+void NetworkServer::handle_mute_toggle(int client_fd) {
+    bool current_mute = audio_engine->is_muted();
+    audio_engine->set_muted(!current_mute);
+
+    std::stringstream json;
+    json << "{\"muted\":" << (!current_mute ? "true" : "false") << "}";
 
     std::string json_str = json.str();
     std::stringstream response;

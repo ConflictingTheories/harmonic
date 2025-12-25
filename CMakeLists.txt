@@ -45,12 +45,27 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/dr_wav.h")
     file(DOWNLOAD "${DR_WAV_URL}" "${CMAKE_CURRENT_SOURCE_DIR}/include/dr_wav.h")
 endif()
 
-# Download websocketpp header-only library
-set(WEBSOCKETPP_URL "https://raw.githubusercontent.com/zaphoyd/websocketpp/develop/websocketpp/websocketpp.hpp")
-set(WEBSOCKETPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/websocketpp.hpp")
-if(NOT EXISTS "${WEBSOCKETPP_PATH}")
-    message(STATUS "Downloading websocketpp...")
-    file(DOWNLOAD "${WEBSOCKETPP_URL}" "${WEBSOCKETPP_PATH}" SHOW_PROGRESS)
+# WebSocket++ support is optional (disabled by default due to compatibility issues with newer Boost)
+# To enable: use -DENABLE_WEBSOCKET=ON when running cmake
+option(ENABLE_WEBSOCKET "Enable WebSocket support (requires compatible Boost/WebSocketPP)" OFF)
+
+if(ENABLE_WEBSOCKET)
+    find_path(WEBSOCKETPP_INCLUDE_DIR websocketpp/server.hpp 
+        PATHS 
+            /opt/homebrew/opt/websocketpp/include
+            /usr/include
+            /usr/local/include
+    )
+    
+    if(WEBSOCKETPP_INCLUDE_DIR)
+        message(STATUS "✓ WebSocketPP headers found - WebSocket support ENABLED")
+        include_directories(${WEBSOCKETPP_INCLUDE_DIR})
+        add_definitions(-DHAS_WEBSOCKETPP)
+    else()
+        message(WARNING "WebSocketPP headers not found")
+    endif()
+else()
+    message(STATUS "⊘ WebSocket support DISABLED (HTTP streaming via libshout enabled)")
 endif()
 
 # Check for Boost (required for WebSocket++)
@@ -68,21 +83,26 @@ if(NOT Boost_FOUND)
 endif()
 
 if(Boost_FOUND)
-    message(STATUS "✓ Boost found - WebSocket functionality ENABLED")
+    message(STATUS "✓ Boost found - WebSocket support AVAILABLE (currently disabled)")
     message(STATUS "  Boost include: ${Boost_INCLUDE_DIRS}")
     message(STATUS "  Boost libraries: ${Boost_LIBRARIES}")
     include_directories(${Boost_INCLUDE_DIRS})
-    add_definitions(-DHAS_WEBSOCKETPP)
+    # Only define HAS_WEBSOCKETPP if ENABLE_WEBSOCKET is ON
+    if(ENABLE_WEBSOCKET)
+        add_definitions(-DHAS_WEBSOCKETPP)
+    endif()
 else()
     # Try manual fallback for Homebrew
     find_path(BOOST_INCLUDE_DIR boost/version.hpp PATHS /opt/homebrew/opt/boost/include)
     if(BOOST_INCLUDE_DIR)
-        message(STATUS "✓ Boost found via manual search - WebSocket functionality ENABLED")
+        message(STATUS "✓ Boost found via manual search - WebSocket support AVAILABLE")
         include_directories(${BOOST_INCLUDE_DIR})
-        add_definitions(-DHAS_WEBSOCKETPP)
+        if(ENABLE_WEBSOCKET)
+            add_definitions(-DHAS_WEBSOCKETPP)
+        endif()
         set(Boost_FOUND TRUE)
     else()
-        message(FATAL_ERROR "✗ Boost not found! Install via: brew install boost")
+        message(WARNING "Boost not found - WebSocket not available")
     endif()
 endif()
 

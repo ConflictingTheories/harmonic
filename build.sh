@@ -23,7 +23,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     fi
     
     # Check and install required packages
-    declare -a packages=("boost" "libshout" "libogg" "libvorbis" "cmake")
+    declare -a packages=("boost" "libshout" "libogg" "libvorbis" "cmake" "websocketpp")
     
     for package in "${packages[@]}"; do
         if ! brew list "$package" &>/dev/null; then

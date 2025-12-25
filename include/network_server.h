@@ -16,30 +16,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <mutex>
-#include "config.h"
-
 #include <iostream>
+
+#include "config.h"
 #include "audio_engine.h"
 #include "playlist_manager.h"
 
-// Libshout includes
+// Libshout for streaming (MP3/OGG)
 #include <shout/shout.h>
 
-// WebSocket++ includes (optional)
+// WebSocket++ includes (optional, disabled by default)
 #ifdef HAS_WEBSOCKETPP
-#include "websocketpp.hpp"
-#include <websocketpp/server.hpp>
-#include <websocketpp/config/asio_no_tls.hpp>
-#endif
-
-// Libshout for streaming
-#include <shout/shout.h>
-
-// WebSocket++ for real-time FFT (optional)
-#ifdef HAS_WEBSOCKETPP
-#include "websocketpp.hpp"
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+    #include <websocketpp/server.hpp>
+    #include <websocketpp/config/asio.hpp>
 #endif
 
 class NetworkServer {
@@ -52,7 +41,6 @@ public:
     }
     
     void start();
-    
     void stop();
     
 private:
@@ -75,26 +63,22 @@ private:
     std::vector<websocketpp::connection_hdl> ws_connections;
     std::mutex ws_connections_mutex;
     std::thread fft_broadcast_thread;
+#else
+    typedef int ws_server;  // Dummy type when WebSocket disabled
 #endif
     
     void handle_client(int client_fd);
-    
     void send_html_response(int client_fd);
-    
     void send_fft_response(int client_fd);
-    
     void send_track_response(int client_fd);
-
     void send_theme_response(int client_fd);
-
+    void send_mute_response(int client_fd);
+    void handle_mute_toggle(int client_fd);
     void send_audio_stream(int client_fd);
-
     void send_404(int client_fd);
 
     std::string escape_json(const std::string& str);
-
     std::string get_theme_param();
-
     std::string generate_html();
 
     // Libshout streaming methods
@@ -102,7 +86,7 @@ private:
     void start_libshout_streaming();
     void stop_libshout_streaming();
 
-    // WebSocket methods
+    // WebSocket methods (stubs when disabled)
     void init_websocket_server();
     void start_websocket_server();
     void stop_websocket_server();
