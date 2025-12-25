@@ -76,13 +76,18 @@ int main(int argc, char** argv) {
             std::cerr << "No tracks found in music directory." << std::endl;
         }
 
-        // Start network server in separate thread
-        std::thread server_thread([&network_srv]() {
-            network_srv->start();
-        });
-
         // Start audio engine
         audio_engine->start();
+
+        // Start network server in separate thread
+        std::thread server_thread([&network_srv]() {
+            try {
+                network_srv->start();
+            } catch (const std::exception& e) {
+                std::cerr << "Network server failed to start: " << e.what() << std::endl;
+                std::cerr << "Continuing without web interface. TUI mode active." << std::endl;
+            }
+        });
 
         // Run TUI on main thread
         tui->run();

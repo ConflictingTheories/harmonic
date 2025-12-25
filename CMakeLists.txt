@@ -139,6 +139,17 @@ else()
     message(FATAL_ERROR "✗ libogg not found! Install via: brew install libogg")
 endif()
 
+# Find lame (MP3 encoding)
+find_path(LAME_INCLUDE_DIR lame/lame.h PATHS /opt/homebrew/include)
+find_library(LAME_LIBRARY NAMES mp3lame PATHS /opt/homebrew/lib)
+if(LAME_INCLUDE_DIR AND LAME_LIBRARY)
+    message(STATUS "✓ lame found - MP3 encoding ENABLED")
+    include_directories(${LAME_INCLUDE_DIR})
+    link_libraries(${LAME_LIBRARY})
+else()
+    message(FATAL_ERROR "✗ lame not found! Install via: brew install lame")
+endif()
+
 # Source files
 set(SOURCES
     src/main.cpp

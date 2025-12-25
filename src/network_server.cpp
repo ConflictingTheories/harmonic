@@ -12,6 +12,7 @@
 #include <chrono>
 #include <algorithm>
 #include <mutex>
+#include <lame/lame.h>
 
 // Libshout streaming implementation
 void NetworkServer::init_libshout() {
@@ -70,13 +71,25 @@ void NetworkServer::start_libshout_streaming() {
 
     shout_streaming_thread = std::thread([this]() {
         // Use buffer size from config for consistent audio processing
-        const size_t CHUNK_SIZE = config.buffer_size * 2; // Lower chunk size for less delay
+        const size_t CHUNK_SIZE = config.buffer_size; // Request frames, not samples
+        static bool first_buffer = true;
         while (running && audio_engine->is_active()) {
             std::vector<float> buffer = audio_engine->get_stream_buffer(CHUNK_SIZE);
 
             if (buffer.empty()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
+            }
+
+            // Debug: Log first buffer to verify audio content
+            if (first_buffer) {
+                float max_sample = 0.0f;
+                for (float sample : buffer) {
+                    max_sample = std::max(max_sample, std::abs(sample));
+                }
+                std::cout << "[STREAM] First buffer received - max amplitude: " << max_sample 
+                          << ", buffer size: " << buffer.size() << std::endl;
+                first_buffer = false;
             }
 
             encode_and_send_audio(buffer);
@@ -254,7 +267,7 @@ void NetworkServer::broadcast_fft_data() {
 void NetworkServer::start() {
     running = true;
 
-    // Initialize libshout
+    // Initialize libshout for all modes - CODER mode streams live generated music
     init_libshout();
     start_libshout_streaming();
 
@@ -354,6 +367,8 @@ void NetworkServer::handle_client(int client_fd) {
         send_fft_response(client_fd);
     } else if (request.find("GET /api/theme") == 0) {
         send_theme_response(client_fd);
+    } else if (request.find("GET /api/mode") == 0) {
+        send_mode_response(client_fd);
     } else if (request.find("GET /api/mute") == 0) {
         send_mute_response(client_fd);
     } else if (request.find("POST /api/mute") == 0) {
@@ -517,15 +532,169 @@ void NetworkServer::handle_mute_toggle(int client_fd) {
     send(client_fd, resp_str.c_str(), resp_str.length(), 0);
 }
 
+void NetworkServer::send_mode_response(int client_fd) {
+    std::stringstream json;
+    json << "{\"mode\":\"" << config.get_mode_string() << "\"}";
 
+    std::string json_str = json.str();
+    std::stringstream response;
+
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Type: application/json\r\n";
+    response << "Content-Length: " << json_str.length() << "\r\n";
+    response << "Access-Control-Allow-Origin: *\r\n";
+    response << "Connection: close\r\n";
+    response << "\r\n";
+    response << json_str;
+
+    std::string resp_str = response.str();
+    send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+}
+
+std::vector<char> generate_wav_header(int sample_rate, int channels, int bits_per_sample, size_t data_size) {
+    std::vector<char> header(44);
+
+    // RIFF header
+    header[0] = 'R'; header[1] = 'I'; header[2] = 'F'; header[3] = 'F';
+    uint32_t file_size = 36 + data_size;
+    memcpy(&header[4], &file_size, 4);
+    header[8] = 'W'; header[9] = 'A'; header[10] = 'V'; header[11] = 'E';
+
+    // fmt subchunk
+    header[12] = 'f'; header[13] = 'm'; header[14] = 't'; header[15] = ' ';
+    uint32_t subchunk1_size = 16;
+    memcpy(&header[16], &subchunk1_size, 4);
+    uint16_t audio_format = 1; // PCM
+    memcpy(&header[20], &audio_format, 2);
+    uint16_t num_channels = channels;
+    memcpy(&header[22], &num_channels, 2);
+    uint32_t sample_rate_u = sample_rate;
+    memcpy(&header[24], &sample_rate_u, 4);
+    uint32_t byte_rate = sample_rate * channels * bits_per_sample / 8;
+    memcpy(&header[28], &byte_rate, 4);
+    uint16_t block_align = channels * bits_per_sample / 8;
+    memcpy(&header[32], &block_align, 2);
+    uint16_t bits_per_sample_u = bits_per_sample;
+    memcpy(&header[34], &bits_per_sample_u, 2);
+
+    // data subchunk
+    header[36] = 'd'; header[37] = 'a'; header[38] = 't'; header[39] = 'a';
+    uint32_t subchunk2_size = data_size;
+    memcpy(&header[40], &subchunk2_size, 4);
+
+    return header;
+}
 
 void NetworkServer::send_audio_stream(int client_fd) {
-    // Stream the currently playing MP3 file directly from disk
+    // In CODER mode, stream the generated coder audio
+    if (config.mode == PlaybackMode::CODER) {
+        // Collect audio data first, then send as complete WAV file
+        // For live streaming, we'll use chunked encoding with WAV frames
+        
+        std::stringstream response;
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Content-Type: audio/mpeg\r\n";
+        response << "Transfer-Encoding: chunked\r\n";
+        response << "Connection: keep-alive\r\n";
+        response << "Cache-Control: no-cache\r\n";
+        response << "icy-name: Harmonic Coder Stream\r\n";
+        response << "icy-description: Live coded music generation\r\n";
+        response << "\r\n";
+
+        std::string resp_str = response.str();
+        send(client_fd, resp_str.c_str(), resp_str.length(), 0);
+
+        std::cout << "[STREAM] CODER mode - streaming live-generated coder audio as MP3 format" << std::endl;
+
+        // Initialize MP3 encoder
+        lame_t lame = lame_init();
+        if (!lame) {
+            std::cerr << "Failed to initialize LAME encoder" << std::endl;
+            return;
+        }
+
+        lame_set_in_samplerate(lame, config.sample_rate);
+        lame_set_num_channels(lame, 2);
+        lame_set_brate(lame, 192);
+        lame_set_mode(lame, STEREO);
+        lame_set_quality(lame, 2); // High quality
+
+        if (lame_init_params(lame) < 0) {
+            std::cerr << "Failed to initialize LAME parameters" << std::endl;
+            lame_close(lame);
+            return;
+        }
+
+        // Stream the audio from the audio engine's buffer
+        const size_t CHUNK_SIZE = config.buffer_size;
+        const size_t MP3_BUFFER_SIZE = 8192;
+        unsigned char mp3_buffer[MP3_BUFFER_SIZE];
+
+        while (running && audio_engine->is_active()) {
+            std::vector<float> buffer = audio_engine->get_stream_buffer(CHUNK_SIZE);
+
+            if (buffer.empty()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+
+            // Convert float to PCM (16-bit stereo)
+            std::vector<int16_t> pcm_data(buffer.size());
+            for (size_t i = 0; i < buffer.size(); ++i) {
+                float sample = std::max(-1.0f, std::min(1.0f, buffer[i]));
+                pcm_data[i] = static_cast<int16_t>(sample * 32767.0f);
+            }
+
+            // Encode to MP3
+            int num_samples = pcm_data.size() / 2; // Stereo samples
+            int bytes_encoded = lame_encode_buffer_interleaved(lame,
+                pcm_data.data(), num_samples, mp3_buffer, MP3_BUFFER_SIZE);
+
+            if (bytes_encoded > 0) {
+                // Send chunk size in hex followed by CRLF
+                std::stringstream chunk_size;
+                chunk_size << std::hex << bytes_encoded << "\r\n";
+                std::string size_str = chunk_size.str();
+                send(client_fd, size_str.c_str(), size_str.length(), MSG_NOSIGNAL);
+
+                // Send MP3 data
+                ssize_t sent = send(client_fd, reinterpret_cast<char*>(mp3_buffer),
+                                   bytes_encoded, MSG_NOSIGNAL);
+                if (sent < 0) {
+                    break;  // Client disconnected
+                }
+
+                // Send CRLF after chunk data
+                send(client_fd, "\r\n", 2, MSG_NOSIGNAL);
+            } else if (bytes_encoded < 0) {
+                std::cerr << "LAME encoding error: " << bytes_encoded << std::endl;
+                break;
+            }
+
+            // Pace the streaming
+            double buffer_duration_ms = (static_cast<double>(buffer.size()) / 2.0 / config.sample_rate) * 1000.0;
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(buffer_duration_ms * 0.5)));
+        }
+
+        // Send final chunk (0) to end the stream
+        send(client_fd, "0\r\n\r\n", 5, MSG_NOSIGNAL);
+
+        // Flush remaining MP3 data
+        int flush_bytes = lame_encode_flush(lame, mp3_buffer, MP3_BUFFER_SIZE);
+        if (flush_bytes > 0) {
+            send(client_fd, reinterpret_cast<char*>(mp3_buffer), flush_bytes, MSG_NOSIGNAL);
+        }
+
+        lame_close(lame);
+        return;
+    }
+
+    // In RADIO/DJ mode, stream the currently playing MP3 file directly from disk
     Track* current_track = playlist_mgr->get_current_track();
-    
+
     if (!current_track || current_track->filepath.empty()) {
         // No track loaded - send 404
-        std::string response = 
+        std::string response =
             "HTTP/1.1 404 Not Found\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: 16\r\n"
@@ -539,7 +708,7 @@ void NetworkServer::send_audio_stream(int client_fd) {
     // Open the MP3 file
     std::ifstream mp3_file(current_track->filepath, std::ios::binary);
     if (!mp3_file.is_open()) {
-        std::string response = 
+        std::string response =
             "HTTP/1.1 404 Not Found\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: 19\r\n"
@@ -578,12 +747,12 @@ void NetworkServer::send_audio_stream(int client_fd) {
     while (mp3_file.read(buffer, BUFFER_SIZE) || mp3_file.gcount() > 0) {
         size_t bytes_to_send = mp3_file.gcount();
         ssize_t sent = send(client_fd, buffer, bytes_to_send, MSG_NOSIGNAL);
-        
+
         if (sent < 0) {
             // Client disconnected
             break;
         }
-        
+
         total_sent += sent;
     }
 

@@ -38,10 +38,11 @@ void PlaylistManager::scan_music_directory() {
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             
             if (is_supported_format(ext)) {
-                Track track(entry.path().string());
-                
+                fs::path full_path = fs::absolute(entry.path());
+                Track track(full_path.string());
+
                 // Parse metadata
-                TrackMetadata meta = MetadataParser::parse(entry.path().string());
+                TrackMetadata meta = MetadataParser::parse(full_path.string());
                 track.title = meta.title.empty() ? entry.path().filename().string() : meta.title;
                 track.artist = meta.artist.empty() ? "Unknown" : meta.artist;
                 track.album = meta.album;

@@ -73,6 +73,7 @@ private:
     void send_track_response(int client_fd);
     void send_theme_response(int client_fd);
     void send_mute_response(int client_fd);
+    void send_mode_response(int client_fd);
     void handle_mute_toggle(int client_fd);
     void send_audio_stream(int client_fd);
     void send_404(int client_fd);

@@ -135,7 +135,7 @@
     </div>
 
     <audio id="audio" controls>
-        <source src="/stream" type="audio/mpeg">
+        <source id="audioSource" src="/stream" type="audio/mpeg">
     </audio>
     <script>
         const canvas = document.getElementById('visualizer');
@@ -311,7 +311,7 @@
 
         // Initialize audio playback (no autoplay)
         // User must click PLAY to start
-        
+
         // FPS counter
         function updateFPS() {
             frameCount++;
@@ -323,7 +323,7 @@
                 lastFpsUpdate = now;
             }
         }
-        
+
         // Apply filter effects based on theme
         function applyThemeFilter() {
             const canvas = document.getElementById('visualizer');
@@ -336,6 +336,14 @@
                 canvas.classList.add('filter-netherworld');
             }
         }
+
+        // Update audio source - always use local stream
+        function updateAudioSource() {
+            const audioSource = document.getElementById('audioSource');
+            audioSource.src = '/stream';
+            audio.load(); // Reload audio element
+        }
+        updateAudioSource(); // Initial load
 
         // Main render loop
         function render() {

@@ -11,6 +11,8 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <condition_variable>
+#include <deque>
 
 struct AudioFrame {
     std::vector<float> samples;
@@ -38,6 +40,7 @@ public:
     
     CoderMode* get_coder_mode();
     std::vector<float> get_stream_buffer(size_t frames);
+    void add_to_stream_queue(const std::vector<float>& buffer);
     FFTData get_fft_data();
     
     bool is_active() const { return is_playing; }
@@ -60,7 +63,9 @@ private:
     std::mutex audio_mutex;
     std::mutex stream_mutex;
     std::mutex fft_mutex;
-    
+    std::condition_variable stream_cv;
+    std::deque<std::vector<float>> stream_queue;
+
     std::string current_track;
     std::vector<float> stream_buffer;
     FFTData current_fft;

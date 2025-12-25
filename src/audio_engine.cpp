@@ -1,5 +1,6 @@
 #include "audio_engine.h"
 #include "config.h"
+#include <iostream>
 
 AudioEngine::AudioEngine(const Config& cfg) 
     : config(cfg), is_playing(false), live_coding_enabled(false), muted(false) {
@@ -70,14 +71,41 @@ CoderMode* AudioEngine::get_coder_mode() {
 }
 
 std::vector<float> AudioEngine::get_stream_buffer(size_t frames) {
-    std::lock_guard<std::mutex> lock(stream_mutex);
-    
+    std::unique_lock<std::mutex> lock(stream_mutex);
+
     size_t samples = frames * 2; // stereo
-    if (stream_buffer.size() < samples) {
-        stream_buffer.resize(samples);
+
+    // Wait for data if queue is empty (with timeout to avoid blocking forever)
+    if (stream_queue.empty()) {
+        stream_cv.wait_for(lock, std::chrono::milliseconds(100));
     }
-    
-    return std::vector<float>(stream_buffer.begin(), stream_buffer.begin() + samples);
+
+    if (!stream_queue.empty()) {
+        // Get the front buffer from queue
+        std::vector<float> result = std::move(stream_queue.front());
+        stream_queue.pop_front();
+
+        // Ensure we return exactly the requested number of samples
+        if (result.size() < samples) {
+            result.resize(samples, 0.0f);
+        } else if (result.size() > samples) {
+            result.resize(samples);
+        }
+
+        return result;
+    }
+
+    // Fallback: return zeros if no data available
+    return std::vector<float>(samples, 0.0f);
+}
+
+void AudioEngine::add_to_stream_queue(const std::vector<float>& buffer) {
+    std::lock_guard<std::mutex> lock(stream_mutex);
+    stream_queue.push_back(buffer);
+    if (stream_queue.size() > 10) { // Limit queue size to prevent memory issues
+        stream_queue.pop_front();
+    }
+    stream_cv.notify_one();
 }
 
 FFTData AudioEngine::get_fft_data() {
@@ -99,22 +127,37 @@ void AudioEngine::data_callback(ma_device* device, void* output, const void* inp
     
     std::lock_guard<std::mutex> lock(engine->audio_mutex);
     
-    // Coder mode - generate audio procedurally
+    // Coder mode - generate audio procedurally (EXCLUSIVE MODE - do not play decoder)
     if (engine->live_coding_enabled) {
         engine->coder->process(out, frame_count);
+        // Debug: Verify coder mode is active
+        static bool logged = false;
+        if (!logged) {
+            std::cout << "[AUDIO] Coder mode ACTIVE - generating procedural audio" << std::endl;
+            logged = true;
+        }
     }
-    // Normal playback mode
+    // Normal playback mode (ONLY if not in coder mode)
     else if (engine->decoder_initialized && engine->is_playing) {
         ma_uint64 frames_read;
         ma_decoder_read_pcm_frames(&engine->decoder, out, frame_count, &frames_read);
-        
+
+        static bool logged_decoder = false;
+        if (!logged_decoder) {
+            std::cout << "[AUDIO] Decoder mode ACTIVE - playing MP3 files" << std::endl;
+            logged_decoder = true;
+        }
+
         if (frames_read < frame_count) {
+            // End of track reached - loop back to beginning
+            ma_decoder_seek_to_pcm_frame(&engine->decoder, 0);
+            // Fill remaining frames with zeros or read from start
             for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i) {
                 out[i] = 0.0f;
             }
         }
     }
-    // Silence
+    // Silence (when not in coder mode and no playback)
     else {
         for (ma_uint32 i = 0; i < frame_count * 2; ++i) {
             out[i] = 0.0f;
@@ -122,18 +165,18 @@ void AudioEngine::data_callback(ma_device* device, void* output, const void* inp
 
         // Update buffers and return early
         {
-            std::lock_guard<std::mutex> stream_lock(engine->stream_mutex);
-            engine->stream_buffer.assign(out, out + frame_count * 2);
+            std::vector<float> stream_data(out, out + frame_count * 2);
+            engine->add_to_stream_queue(stream_data);
         }
         engine->calculate_fft(out, frame_count);
         return;
     }
 
     // Update stream buffer for network streaming BEFORE applying mute
-    // This ensures clients hear unmuted audio
+    // This ensures clients hear unmuted audio (including coder mode audio)
     {
-        std::lock_guard<std::mutex> stream_lock(engine->stream_mutex);
-        engine->stream_buffer.assign(out, out + frame_count * 2);
+        std::vector<float> stream_data(out, out + frame_count * 2);
+        engine->add_to_stream_queue(stream_data);
     }
     
     // Calculate FFT data for visualizer BEFORE applying mute
