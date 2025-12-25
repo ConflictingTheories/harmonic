@@ -46,77 +46,29 @@ public:
     bool save_playlist(const std::string& filepath, PlaylistFormat format = PlaylistFormat::M3U);
     
     // Playback control
-    void set_auto_advance(bool enable) { auto_advance_enabled = enable; }
-    void enable_cue_system(bool enable) { cue_system_enabled = enable; }
+    void set_auto_advance(bool enable);
+    void enable_cue_system(bool enable);
     
-    Track* get_current_track() {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        if (tracks.empty()) return nullptr;
-        return &tracks[current_index];
-    }
+    Track* get_current_track();
+    Track* get_next_track();
     
-    Track* get_next_track() {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        if (tracks.empty()) return nullptr;
-        size_t next = (current_index + 1) % tracks.size();
-        return &tracks[next];
-    }
-    
-    void next() {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        if (tracks.empty()) return;
-        current_index = (current_index + 1) % tracks.size();
-    }
-    
-    void previous() {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        if (tracks.empty()) return;
-        if (current_index > 0) {
-            current_index--;
-        } else {
-            current_index = tracks.size() - 1;
-        }
-    }
-    
-    void jump_to(size_t index) {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        if (index < tracks.size()) {
-            current_index = index;
-        }
-    }
+    void next();
+    void previous();
+    void jump_to(size_t index);
     
     // Queue management
-    void add_to_queue(const std::string& filepath) {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        queue.push_back(filepath);
-    }
-    
-    Track* get_queued_track() {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        if (queue.empty()) return nullptr;
-        
-        Track* track = new Track(queue.front());
-        queue.erase(queue.begin());
-        return track;
-    }
-    
-    bool has_queued() {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        return !queue.empty();
-    }
+    void add_to_queue(const std::string& filepath);
+    Track* get_queued_track();
+    bool has_queued();
     
     // Playlist manipulation
     void shuffle();
     void sort_by(SortCriteria criteria);
     
     // Getters
-    size_t get_track_count() const { return tracks.size(); }
-    size_t get_current_index() const { return current_index; }
-    
-    std::vector<Track> get_all_tracks() {
-        std::lock_guard<std::mutex> lock(playlist_mutex);
-        return tracks;
-    }
+    size_t get_track_count() const;
+    size_t get_current_index() const;
+    std::vector<Track> get_all_tracks();
     
 private:
     Config config;

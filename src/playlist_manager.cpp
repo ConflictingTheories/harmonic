@@ -308,3 +308,79 @@ bool PlaylistManager::is_supported_format(const std::string& ext) {
     return lower_ext == ".mp3" || lower_ext == ".wav" || lower_ext == ".ogg" || 
            lower_ext == ".flac" || lower_ext == ".m4a" || lower_ext == ".aac";
 }
+
+void PlaylistManager::set_auto_advance(bool enable) { 
+    auto_advance_enabled = enable; 
+}
+
+void PlaylistManager::enable_cue_system(bool enable) { 
+    cue_system_enabled = enable; 
+}
+
+Track* PlaylistManager::get_current_track() {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    if (tracks.empty()) return nullptr;
+    return &tracks[current_index];
+}
+
+Track* PlaylistManager::get_next_track() {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    if (tracks.empty()) return nullptr;
+    size_t next = (current_index + 1) % tracks.size();
+    return &tracks[next];
+}
+
+void PlaylistManager::next() {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    if (tracks.empty()) return;
+    current_index = (current_index + 1) % tracks.size();
+}
+
+void PlaylistManager::previous() {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    if (tracks.empty()) return;
+    if (current_index > 0) {
+        current_index--;
+    } else {
+        current_index = tracks.size() - 1;
+    }
+}
+
+void PlaylistManager::jump_to(size_t index) {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    if (index < tracks.size()) {
+        current_index = index;
+    }
+}
+
+void PlaylistManager::add_to_queue(const std::string& filepath) {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    queue.push_back(filepath);
+}
+
+Track* PlaylistManager::get_queued_track() {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    if (queue.empty()) return nullptr;
+    
+    Track* track = new Track(queue.front());
+    queue.erase(queue.begin());
+    return track;
+}
+
+bool PlaylistManager::has_queued() {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    return !queue.empty();
+}
+
+size_t PlaylistManager::get_track_count() const { 
+    return tracks.size(); 
+}
+
+size_t PlaylistManager::get_current_index() const { 
+    return current_index; 
+}
+
+std::vector<Track> PlaylistManager::get_all_tracks() {
+    std::lock_guard<std::mutex> lock(playlist_mutex);
+    return tracks;
+}

@@ -142,6 +142,7 @@ endif()
 # Source files
 set(SOURCES
     src/main.cpp
+    src/config.cpp
     src/audio_engine.cpp
     src/playlist_manager.cpp
     src/network_server.cpp
