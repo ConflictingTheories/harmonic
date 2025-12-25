@@ -127,7 +127,7 @@ private:
             }
         }
         
-        std::cout << "║   [Esc] Quit                                                   ║\n";
+        std::cout << "║   [Esc] or [Q] Quit                                            ║\n";
         std::cout << "╚════════════════════════════════════════════════════════════════╝\n";
     }
     
@@ -200,6 +200,11 @@ private:
                     cycle_theme();
                     break;
                     
+                case 'm':
+                case 'M':  // Mute toggle
+                    audio_engine->set_muted(!audio_engine->is_muted());
+                    break;
+                    
                 // Coder mode controls
                 case '1': case '2': case '3': case '4': case '5':
                 case '6': case '7': case '8': case '9':
@@ -219,7 +224,9 @@ private:
 
                 // Removed duplicate 'l' and 'L' cases
 
-                case 27:   // Escape
+                case 'q':
+                case 'Q':
+                case 27:   // Escape, Q, or Ctrl+C
                     running = false;
                     break;
             }

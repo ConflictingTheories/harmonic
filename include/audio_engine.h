@@ -174,21 +174,23 @@ private:
             return;
         }
 
-        // Apply mute if enabled
-        if (engine->muted) {
-            for (ma_uint32 i = 0; i < frame_count * 2; ++i) {
-                out[i] = 0.0f;
-            }
-        }
-        
-        // Update stream buffer for network streaming
+        // Update stream buffer for network streaming BEFORE applying mute
+        // This ensures clients hear unmuted audio
         {
             std::lock_guard<std::mutex> stream_lock(engine->stream_mutex);
             engine->stream_buffer.assign(out, out + frame_count * 2);
         }
         
-        // Calculate FFT data for visualizer
+        // Calculate FFT data for visualizer BEFORE applying mute
+        // This ensures visualizer shows unmuted audio data
         engine->calculate_fft(out, frame_count);
+        
+        // Apply mute if enabled (ONLY affects local speaker output)
+        if (engine->muted) {
+            for (ma_uint32 i = 0; i < frame_count * 2; ++i) {
+                out[i] = 0.0f;
+            }
+        }
     }
     
     void calculate_fft(float* samples, size_t frame_count) {
