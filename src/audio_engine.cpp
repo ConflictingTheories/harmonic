@@ -5,7 +5,8 @@ AudioEngine::AudioEngine(const Config& cfg)
     : config(cfg), is_playing(false), live_coding_enabled(false), muted(false) {
     coder = std::make_unique<CoderMode>(config.sample_rate);
     
-    ma_decoder_config decoder_config = ma_decoder_config_init(
+    // Decoder config reserved for future advanced decoding support
+    (void)ma_decoder_config_init(
         ma_format_f32,
         2, // stereo
         config.sample_rate

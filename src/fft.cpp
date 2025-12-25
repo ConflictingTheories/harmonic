@@ -51,7 +51,7 @@ std::vector<float> SimpleFFT::analyze(const float* samples, size_t count, int nu
     std::vector<float> magnitudes(num_bands, 0.0f);
     size_t bins_per_band = (fft_size / 2) / num_bands;
     
-    for (size_t band = 0; band < num_bands; ++band) {
+    for (int band = 0; band < (int)num_bands; ++band) {
         float sum = 0.0f;
         size_t start = band * bins_per_band;
         size_t end = start + bins_per_band;

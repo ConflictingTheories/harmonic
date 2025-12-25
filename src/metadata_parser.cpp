@@ -55,8 +55,7 @@ bool MetadataParser::parse_id3v2(const std::string& filepath, TrackMetadata& met
     
     // Parse version
     uint8_t version = header[3];
-    uint8_t revision = header[4];
-    uint8_t flags = header[5];
+    // (revision and flags reserved for future use)
     
     // Parse size (synchsafe integer)
     uint32_t size = 0;
