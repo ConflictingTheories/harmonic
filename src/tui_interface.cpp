@@ -3,9 +3,8 @@
 
 TUIInterface::TUIInterface(Config &cfg,
                            std::shared_ptr<AudioEngine> audio,
-                           std::shared_ptr<PlaylistManager> playlist,
-                           std::shared_ptr<DJCueSystem> ma_device_job_thread_next)
-    : config(cfg), audio_engine(audio), playlist_mgr(playlist), dj(dj), running(true)
+                           std::shared_ptr<PlaylistManager> playlist)
+    : config(cfg), audio_engine(audio), playlist_mgr(playlist), running(true)
 {
     setup_terminal();
 }
@@ -24,7 +23,15 @@ void TUIInterface::run()
     {
         update_display();
         handle_input();
+        background_process();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+void TUIInterface::background_process()
+{
+    if(this->audio_engine->is_active()){
+
     }
 }
 
@@ -177,17 +184,6 @@ void TUIInterface::handle_input()
                 audio_engine->start();
             }
             break;
-        case 'c':
-        case 'C': // Cue Next Track
-            if ((&config)->mode != PlaybackMode::DJ)
-                break;
-            dj->get_next_cue();
-        case 'k':
-        case 'K': // Next
-            if ((&config)->mode == PlaybackMode::DJ)
-            {
-                // dj->cue_next_track(); // todo - implement...
-            }
         case 'n':
         case 'N': // Next
             playlist_mgr->next();

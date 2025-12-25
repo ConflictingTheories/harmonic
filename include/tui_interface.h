@@ -12,15 +12,13 @@
 #include "config.h"
 #include "audio_engine.h"
 #include "playlist_manager.h"
-#include "dj_cue_system.h"
 
 class TUIInterface
 {
 public:
     TUIInterface(Config &cfg,
                  std::shared_ptr<AudioEngine> audio,
-                 std::shared_ptr<PlaylistManager> playlist,
-                 std::shared_ptr<DJCueSystem> dj);
+                 std::shared_ptr<PlaylistManager> playlist);
 
     ~TUIInterface();
 
@@ -30,19 +28,19 @@ private:
     Config &config;
     std::shared_ptr<AudioEngine> audio_engine;
     std::shared_ptr<PlaylistManager> playlist_mgr;
-    std::shared_ptr<DJCueSystem> dj;
     bool running;
 
     struct termios old_term, new_term;
 
+    std::string draw_bar(float value, int width);
     void setup_terminal();
     void restore_terminal();
+    void background_process();
     void clear_screen();
     void move_cursor(int row, int col);
     void print_header();
     void update_display();
     void print_controls();
-    std::string draw_bar(float value, int width);
     void handle_input();
     void load_current_track();
     void show_track_list();

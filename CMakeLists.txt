@@ -159,7 +159,6 @@ set(SOURCES
     src/network_server.cpp
     src/tui_interface.cpp
     src/metadata_parser.cpp
-    src/dj_cue_system.cpp
     src/coder_mode.cpp
     src/fft.cpp
     src/miniaudio_impl.cpp
@@ -172,7 +171,6 @@ set(HEADERS
     include/network_server.h
     include/tui_interface.h
     include/metadata_parser.h
-    include/dj_cue_system.h
     include/coder_mode.h
     include/fft.h
     include/miniaudio.h

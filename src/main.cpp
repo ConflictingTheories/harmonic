@@ -55,8 +55,7 @@ int main(int argc, char **argv)
         // Initialize core components
         auto audio_engine = std::make_shared<AudioEngine>(config);
         auto playlist_mgr = std::make_shared<PlaylistManager>(config);
-        auto dj = std::make_shared<DJCueSystem>(44000);
-        auto tui = std::make_shared<TUIInterface>(config, audio_engine, playlist_mgr, dj);
+        auto tui = std::make_shared<TUIInterface>(config, audio_engine, playlist_mgr);
         // Use new/shared_ptr instead of make_shared due to reference member
         auto network_srv = std::shared_ptr<NetworkServer>(new NetworkServer(config, audio_engine, playlist_mgr));
 
