@@ -178,26 +178,12 @@ void AudioEngine::data_callback(ma_device *device, void *output, const void *inp
 
         if (frames_read < frame_count)
         {
-            // End of track reached
-            if (engine->config.mode == PlaybackMode::RADIO || engine->config.mode == PlaybackMode::DJ)
+            // End of track reached - signal track ended for auto-advance in all non-CODER modes
+            engine->track_ended = true;
+            // Fill remaining frames with zeros
+            for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
             {
-                // Signal track ended for auto-advance
-                engine->track_ended = true;
-                // Fill remaining frames with zeros
-                for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
-                {
-                    out[i] = 0.0f;
-                }
-            }
-            else
-            {
-                // Loop back to beginning for other modes
-                ma_decoder_seek_to_pcm_frame(&engine->decoder, 0);
-                // Fill remaining frames with zeros or read from start
-                for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
-                {
-                    out[i] = 0.0f;
-                }
+                out[i] = 0.0f;
             }
         }
     }

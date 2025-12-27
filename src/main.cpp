@@ -74,6 +74,11 @@ int main(int argc, char **argv)
             break;
         }
 
+        // Enable auto-advance for all modes except CODER
+        if (config.mode != PlaybackMode::CODER) {
+            playlist_mgr->set_auto_advance(true);
+        }
+
         // Automatically play the first sample in the music directory
         Track *first_track = playlist_mgr->get_current_track();
         if (first_track && !first_track->filepath.empty())
