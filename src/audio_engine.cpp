@@ -3,7 +3,7 @@
 #include <iostream>
 
 AudioEngine::AudioEngine(const Config &cfg)
-    : config(cfg), is_playing(false), live_coding_enabled(false), muted(false)
+    : config(cfg), is_playing(false), live_coding_enabled(false), muted(false), track_ended(false)
 {
     coder = std::make_unique<CoderMode>(config.sample_rate);
 
@@ -68,6 +68,7 @@ bool AudioEngine::load_track(const std::string &filepath)
 
     decoder_initialized = true;
     current_track = filepath;
+    track_ended = false;  // Reset track ended flag when loading new track
     return true;
 }
 
@@ -177,12 +178,26 @@ void AudioEngine::data_callback(ma_device *device, void *output, const void *inp
 
         if (frames_read < frame_count)
         {
-            // End of track reached - loop back to beginning
-            ma_decoder_seek_to_pcm_frame(&engine->decoder, 0);
-            // Fill remaining frames with zeros or read from start
-            for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
+            // End of track reached
+            if (engine->config.mode == PlaybackMode::RADIO || engine->config.mode == PlaybackMode::DJ)
             {
-                out[i] = 0.0f;
+                // Signal track ended for auto-advance
+                engine->track_ended = true;
+                // Fill remaining frames with zeros
+                for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
+                {
+                    out[i] = 0.0f;
+                }
+            }
+            else
+            {
+                // Loop back to beginning for other modes
+                ma_decoder_seek_to_pcm_frame(&engine->decoder, 0);
+                // Fill remaining frames with zeros or read from start
+                for (ma_uint32 i = frames_read * 2; i < frame_count * 2; ++i)
+                {
+                    out[i] = 0.0f;
+                }
             }
         }
     }

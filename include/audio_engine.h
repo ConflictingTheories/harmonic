@@ -50,6 +50,8 @@ public:
     std::string get_current_track() const;
     void set_muted(bool mute);
     bool is_muted() const { return muted; }
+    bool has_track_ended() const { return track_ended; }
+    void reset_track_ended() { track_ended = false; }
 
 private:
     Config config;
@@ -60,6 +62,7 @@ private:
     std::atomic<bool> is_playing;
     std::atomic<bool> live_coding_enabled;
     std::atomic<bool> muted;
+    std::atomic<bool> track_ended;
 
     std::unique_ptr<CoderMode> coder;
 

@@ -48,6 +48,7 @@ public:
     // Playback control
     void set_auto_advance(bool enable);
     void enable_cue_system(bool enable);
+    bool is_auto_advance_enabled() const { return auto_advance_enabled; }
     
     Track* get_current_track();
     Track* get_next_track();

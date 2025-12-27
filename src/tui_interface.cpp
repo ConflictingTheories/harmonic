@@ -31,7 +31,12 @@ void TUIInterface::run()
 void TUIInterface::background_process()
 {
     if(this->audio_engine->is_active()){
-
+        // Check for auto-advance if track has ended
+        if (audio_engine->has_track_ended() && playlist_mgr->is_auto_advance_enabled()) {
+            playlist_mgr->next();
+            load_current_track();
+            audio_engine->reset_track_ended();
+        }
     }
 }
 
