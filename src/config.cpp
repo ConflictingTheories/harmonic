@@ -128,6 +128,10 @@ void Config::parse_line(const std::string &line)
     {
         stream_format = value;
     }
+    else if (key == "buffer_size") // Add this block
+    {
+        buffer_size = std::stoi(value);
+    }
 }
 
 std::string Config::trim(const std::string &str)

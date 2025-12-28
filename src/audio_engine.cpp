@@ -86,35 +86,49 @@ std::vector<float> AudioEngine::get_stream_buffer(size_t frames)
 {
     std::unique_lock<std::mutex> lock(stream_mutex);
 
-    size_t samples = frames * 2; // stereo
+    size_t required_samples = frames * 2; // samples = frames * channels (2 for stereo)
 
-    // Wait for data if queue is empty (with timeout to avoid blocking forever)
-    if (stream_queue.empty())
+    // Append data from stream_queue to stream_buffer until we have enough
+    while (stream_buffer.size() < required_samples)
     {
-        stream_cv.wait_for(lock, std::chrono::milliseconds(100));
-    }
-
-    if (!stream_queue.empty())
-    {
-        // Get the front buffer from queue
-        std::vector<float> result = std::move(stream_queue.front());
+        // Wait for data if queue is empty
+        if (stream_queue.empty())
+        {
+            // Wait with a timeout. If timeout, we return what we have (potentially zeros).
+            // This might still lead to underruns but prevents indefinite blocking.
+            if (stream_cv.wait_for(lock, std::chrono::milliseconds(100)) == std::cv_status::timeout) {
+                // If timed out and still no data, break and return current buffer (might be empty/partial)
+                break;
+            }
+            if (stream_queue.empty()) { // Check again after wait
+                break;
+            }
+        }
+        
+        // Take data from the front of the queue
+        std::vector<float> chunk = std::move(stream_queue.front());
         stream_queue.pop_front();
-
-        // Ensure we return exactly the requested number of samples
-        if (result.size() < samples)
-        {
-            result.resize(samples, 0.0f);
-        }
-        else if (result.size() > samples)
-        {
-            result.resize(samples);
-        }
-
-        return result;
+        
+        stream_buffer.insert(stream_buffer.end(), chunk.begin(), chunk.end());
     }
 
-    // Fallback: return zeros if no data available
-    return std::vector<float>(samples, 0.0f);
+    // Extract the required number of samples
+    std::vector<float> result(required_samples);
+    if (stream_buffer.size() >= required_samples)
+    {
+        std::copy_n(stream_buffer.begin(), required_samples, result.begin());
+        stream_buffer.erase(stream_buffer.begin(), stream_buffer.begin() + required_samples);
+    }
+    else
+    {
+        // If we still don't have enough after consuming all available queue data
+        // (e.g., if wait_for timed out), fill the rest with zeros.
+        std::copy(stream_buffer.begin(), stream_buffer.end(), result.begin());
+        std::fill(result.begin() + stream_buffer.size(), result.end(), 0.0f);
+        stream_buffer.clear(); // Clear the buffer as it's been consumed
+    }
+
+    return result;
 }
 
 void AudioEngine::add_to_stream_queue(const std::vector<float> &buffer)
